@@ -1,0 +1,95 @@
+@page
+@model SparePartControl.Pages.Parts.ImportModel
+@{ ViewData["Title"] = "Import Master Data"; var r = Model.Result; }
+<h1 class="page-title mb-3">Import Master Data dari Excel <partial name="_SiteTitle" /></h1>
+@if (SiteCtx.MultiSiteSystem) { <div class="alert alert-info py-2">Data diimport ke site <b>@SiteCtx.Current?.Code — @SiteCtx.Current?.Name</b>. Untuk site lain, pindah site di menu atas lalu import file site tersebut.</div> }
+<div class="row g-3">
+<div class="col-xl-7">
+<div class="card">
+    <div class="card-body">
+        @if (Model.Error != null) { <div class="alert alert-danger py-2">@Model.Error</div> }
+
+        @if (r != null)
+        {
+            <div class="alert @(Model.Committed ? "alert-success" : "alert-info") py-2">
+                <b>@(Model.Committed ? "Import tersimpan." : "Hasil pengecekan — belum ada yang disimpan.")</b>
+                @Model.FileName · sheet <b>@r.Source</b> · @r.RowCount baris data<br />
+                Part baru: <b>@r.Added</b> · diperbarui: <b>@r.Updated</b>
+                @if (Model.SyncStock) { <span>· stok disamakan: <b>@r.StockSynced</b></span> }
+                · dilewati: <b>@r.Skipped</b>
+                @if (r.Generated > 0) { <span>· goods code otomatis: <b>@r.Generated</b></span> }
+                @if (r.RatesUpdated.Count > 0) { <br /><span>Kurs dari tblRate: @string.Join("; ", r.RatesUpdated)</span> }
+                @if (Model.Committed) { <div class="mt-1"><a asp-page="Index">Lihat master data →</a></div> }
+            </div>
+            @if (r.Errors.Count > 0)
+            {
+                <div class="alert alert-warning py-2">
+                    <b>@r.Errors.Count baris bermasalah</b> (dilewati, baris lain tetap diimport):
+                    <ul class="mb-0 small">@foreach (var e in r.Errors.Take(100)) { <li>@e</li> }</ul>
+                    @if (r.Errors.Count > 100) { <div class="small">… dan @(r.Errors.Count - 100) lainnya.</div> }
+                </div>
+            }
+            @if (r.Mapping.Count > 0)
+            {
+                <details class="mb-3" open="@(!Model.Committed)">
+                    <summary class="small">Kolom yang dikenali (@r.Mapping.Count)@(r.IgnoredHeaders.Count > 0 ? $" · diabaikan: {r.IgnoredHeaders.Count}" : "")</summary>
+                    <table class="table table-sm small mb-1 w-auto">
+                        @foreach (var (h, f) in r.Mapping) { <tr><td><code>@h</code></td><td>→ @f</td></tr> }
+                    </table>
+                    @if (r.IgnoredHeaders.Count > 0)
+                    {
+                        <div class="small text-muted">Diabaikan (dihitung otomatis oleh aplikasi / tidak dipakai): @string.Join(", ", r.IgnoredHeaders)</div>
+                    }
+                </details>
+            }
+            @if (!Model.Committed && Model.Token != null && r.Added + r.Updated > 0)
+            {
+                <form method="post" asp-page-handler="Commit" class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                    <input type="hidden" asp-for="Token" />
+                    <input type="hidden" name="fileName" value="@Model.FileName" />
+                    <input type="hidden" asp-for="SyncStock" />
+                    <input type="hidden" asp-for="ImportRates" />
+                    <button class="btn btn-success" type="submit">✓ Simpan import (@(r.Added) baru, @(r.Updated) diperbarui)</button>
+                    <a class="btn btn-outline-secondary" asp-page="Import">Batal</a>
+                </form>
+            }
+            <hr />
+        }
+
+        <form method="post" asp-page-handler="Check" enctype="multipart/form-data">
+            <label class="form-label fw-semibold">1. Pilih file</label>
+            <input type="file" name="file" accept=".xlsx,.xlsm,.csv" class="form-control mb-2" required />
+            <div class="form-check">
+                <input class="form-check-input" asp-for="ImportRates" />
+                <label class="form-check-label" asp-for="ImportRates">Ambil kurs dari tabel <code>tblRate</code> (kolom currency &amp; Rate_to_USD) bila ada di file</label>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" asp-for="SyncStock" />
+                <label class="form-check-label" asp-for="SyncStock">Part yang sudah ada: samakan stok dengan <code>nowStock</code> di file (selisih dicatat sebagai Adjustment)</label>
+            </div>
+            <button class="btn btn-primary" type="submit">2. Cek file</button>
+            <span class="small text-muted ms-2">Belum ada yang disimpan sampai Anda menekan <b>Simpan import</b>.</span>
+        </form>
+    </div>
+</div>
+</div>
+<div class="col-xl-5">
+<div class="card">
+    <div class="card-body small">
+        <p class="mb-2">Bisa langsung upload file <b>00. MASTER STOCK APP.xlsm</b> (atau .xlsx / .csv). Sistem mencari sheet yang punya header <code>goodsCode</code> dan <code>goodsName</code>. Kolom yang dibaca:</p>
+        <p><code>goodsCode, goodsName, Model, stockCategory, rackName, makerName, suppName, currency, unit_price, initialStock, minStock, maxStock, nowStock, Remark</code></p>
+        <ul class="text-muted mb-2">
+            <li><code>unit_USD</code>, <code>Status</code> dan <code>StockValue</code> dihitung ulang oleh aplikasi dengan rumus yang sama seperti Excel.</li>
+            <li>Goods code baru → part dibuat, <code>nowStock</code> dicatat sebagai saldo awal.</li>
+            <li>Goods code yang sudah ada → data master diperbarui; stok hanya diubah bila opsi <i>samakan stok</i> dicentang.</li>
+            <li><code>stockCategory</code>: ACTIVE / INACTIVE. Currency: USD / SGD / JPY / IDR.</li>
+            <li>Part 2nd used otomatis berakhiran <code>@Part.SecondSuffix</code> (kolom tambahan <code>condition</code> = 2nd).</li>
+            <li>goodsCode kosong → @(HttpContext.RequestServices.GetRequiredService<AppSettingsService>().Code.AutoGenerateWhenEmpty ? "dibuat otomatis sesuai format di Pengaturan" : "baris dilewati (aktifkan pembuatan otomatis di Pengaturan)").</li>
+            <li>Kolom tambahan opsional: <code>specification, unit, machine, reusable, condition</code>.</li>
+        </ul>
+        <a class="btn btn-sm btn-outline-secondary" asp-page-handler="Template">Download template CSV</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/Parts?handler=ExportExcel">Export master saat ini (.xlsx)</a>
+    </div>
+</div>
+</div>
+</div>

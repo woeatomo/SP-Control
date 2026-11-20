@@ -1,0 +1,166 @@
+@page "{id:int}"
+@model SparePartControl.Pages.StockChecks.DetailsModel
+@{
+    var s = Model.Session;
+    ViewData["Title"] = "Stock Checking " + s.Period;
+    var counted = Model.Items.Count(i => i.CountedQty.HasValue);
+    var variance = Model.Items.Count(i => i.Variance is not null and not 0);
+    var varUsd = Model.Items.Where(i => i.Variance.HasValue).Sum(i => i.Variance!.Value * i.UnitPriceUsd);
+}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="page-title me-auto">Stock Checking @s.Period <span class="text-muted fw-normal">· @s.PeriodLabel · @s.CheckedBy @(SiteCtx.MultiSiteSystem ? "· site " + SiteCtx.CodeOf(s.SiteId) : "")</span></h1>
+    <a class="btn btn-outline-secondary btn-sm d-print-none" asp-page-handler="Export" asp-route-id="@s.Id">Export CSV</a>
+    <button class="btn btn-outline-secondary btn-sm d-print-none" onclick="window.print()">🖨 Cetak</button>
+    <a class="btn btn-outline-secondary btn-sm d-print-none" asp-page="Index">Kembali</a>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3"><div class="card stat"><div class="label">Sudah dihitung</div><div class="value"><span id="stCounted">@counted</span> / <span id="stTotal">@Model.Items.Count</span></div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat"><div class="label">Item selisih</div><div class="value" id="stVar">@variance</div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat"><div class="label">Nilai selisih (USD)</div><div class="value">@varUsd.ToString("#,0.00")</div><div class="sub">diperbarui saat halaman dimuat ulang</div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat"><div class="label">Status</div><div class="value fs-5">@(s.Status == StockCheckStatus.Open ? "Berjalan" : "Selesai")</div><div class="sub">@(s.ClosedAt.HasValue ? "Ditutup " + s.ClosedAt.Value.ToString("dd MMM yyyy") + (s.AdjustmentPosted ? " · adjustment diposting" : " · tanpa adjustment") : "Mulai " + s.StartedAt.ToString("dd MMM yyyy"))</div></div></div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-white d-print-none">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            @if (Model.IsOpen)
+            {
+                <div class="input-group input-group-sm" style="max-width:380px">
+                    <input class="form-control" id="scanBox" placeholder="Scan QR / ketik part number, Enter" autocomplete="off" autofocus />
+                    <button class="btn btn-outline-secondary" type="button" id="btnCam">📷 Kamera</button>
+                </div>
+            }
+            <select id="view" class="form-select form-select-sm" style="max-width:190px">
+                <option value="all">Semua item</option>
+                <option value="todo">Belum dihitung</option>
+                <option value="var">Ada selisih</option>
+            </select>
+            <input id="find" class="form-control form-control-sm" style="max-width:220px" placeholder="Filter part / lokasi" />
+            <span class="small ms-auto" id="msg"></span>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0" id="tbl">
+            <thead><tr><th>Lokasi</th><th>Part</th><th class="num">Stok Sistem</th><th style="width:130px">Hasil Hitung</th><th class="num">Selisih</th><th>Catatan</th><th class="d-print-none"></th></tr></thead>
+            <tbody>
+                @foreach (var i in Model.Items)
+                {
+                    <tr data-part="@i.PartId" data-pn="@i.Part.PartNumber.ToUpperInvariant()" data-text="@($"{i.Part.PartNumber} {i.Part.Name} {i.Part.Location}".ToLowerInvariant())"
+                        data-state="@(i.CountedQty.HasValue ? (i.Variance != 0 ? "var" : "ok") : "todo")">
+                        <td class="nowrap">@i.Part.Location</td>
+                        <td><b>@i.Part.PartNumber</b> <span class="small text-muted">@i.Part.Unit</span><div class="small text-muted">@i.Part.Name</div></td>
+                        <td class="num sys">@StockService.Fmt(i.SystemQty)</td>
+                        <td>
+                            @if (Model.IsOpen)
+                            {
+                                <input type="number" step="any" min="0" class="form-control form-control-sm cnt" value="@i.CountedQty?.ToString("0.##")" />
+                            }
+                            else { <span>@(i.CountedQty.HasValue ? StockService.Fmt(i.CountedQty.Value) : "—")</span> }
+                        </td>
+                        <td class="num var @(i.Variance < 0 ? "text-danger" : i.Variance > 0 ? "text-primary" : "")">@(i.Variance.HasValue ? (i.Variance > 0 ? "+" : "") + StockService.Fmt(i.Variance.Value) : "")</td>
+                        <td>
+                            @if (Model.IsOpen) { <input class="form-control form-control-sm note" value="@i.Note" maxlength="300" /> }
+                            else { <span class="small">@i.Note</span> }
+                        </td>
+                        <td class="d-print-none">@if (Model.IsOpen) { <button type="button" class="btn btn-sm btn-outline-primary py-0 save">Simpan</button> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (Model.IsOpen)
+{
+    <form method="post" asp-page-handler="Close" asp-route-id="@s.Id" class="card mt-3 d-print-none" id="closeForm"
+          onsubmit="return confirm('Tutup sesi stock checking ini? Setelah ditutup hasil hitung tidak bisa diubah.')">
+        <div class="card-body d-flex flex-wrap gap-3 align-items-center">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="postAdjustment" value="true" id="adj" checked />
+                <label class="form-check-label" for="adj">Posting selisih sebagai <b>adjustment stok</b> (stok sistem disamakan dengan hasil hitung)</label>
+            </div>
+            <button class="btn btn-danger ms-auto" type="submit">Tutup Sesi</button>
+        </div>
+    </form>
+}
+
+@section Scripts {
+<script>
+(function () {
+    const tbl = document.getElementById('tbl'), msg = document.getElementById('msg');
+    const token = document.querySelector('#closeForm input[name=__RequestVerificationToken]')?.value;
+    const view = document.getElementById('view'), find = document.getElementById('find');
+
+    function applyFilter() {
+        const v = view.value, k = find.value.trim().toLowerCase();
+        tbl.querySelectorAll('tbody tr').forEach(tr => {
+            const okV = v === 'all' || tr.dataset.state === v;
+            tr.style.display = okV && (!k || tr.dataset.text.includes(k)) ? '' : 'none';
+        });
+    }
+    view.addEventListener('change', applyFilter);
+    find.addEventListener('input', applyFilter);
+
+    function stats() {
+        const rows = [...tbl.querySelectorAll('tbody tr')];
+        document.getElementById('stTotal').textContent = rows.length;
+        document.getElementById('stCounted').textContent = rows.filter(r => r.dataset.state !== 'todo').length;
+        document.getElementById('stVar').textContent = rows.filter(r => r.dataset.state === 'var').length;
+    }
+
+    async function save(tr) {
+        const cnt = tr.querySelector('.cnt').value, note = tr.querySelector('.note').value;
+        const fd = new FormData();
+        fd.append('partId', tr.dataset.part); fd.append('counted', cnt); fd.append('note', note);
+        fd.append('__RequestVerificationToken', token);
+        const r = await fetch('?handler=Count', { method: 'POST', body: fd });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) { msg.innerHTML = '<span class="text-danger">' + SP.esc(j.error || 'Gagal menyimpan') + '</span>'; return false; }
+        tr.querySelector('.sys').textContent = SP.fmt(j.systemQty);
+        const vc = tr.querySelector('.var');
+        vc.textContent = j.variance == null ? '' : (j.variance > 0 ? '+' : '') + SP.fmt(j.variance);
+        vc.className = 'num var ' + (j.variance < 0 ? 'text-danger' : j.variance > 0 ? 'text-primary' : '');
+        tr.dataset.state = j.variance == null ? 'todo' : (j.variance !== 0 ? 'var' : 'ok');
+        msg.innerHTML = '<span class="text-success">✓ Tersimpan: ' + SP.esc(tr.dataset.pn) + '</span>';
+        stats();
+        return true;
+    }
+
+    tbl.addEventListener('click', e => { const b = e.target.closest('.save'); if (b) save(b.closest('tr')); });
+    const box = document.getElementById('scanBox');
+    tbl.addEventListener('keydown', async e => {
+        if (e.key === 'Enter' && e.target.matches('.cnt, .note')) {
+            e.preventDefault();
+            if (await save(e.target.closest('tr')) && box) { box.value = ''; box.focus(); }
+        }
+    });
+
+    async function go(code) {
+        code = code.trim(); if (!code) return;
+        let tr = [...tbl.querySelectorAll('tbody tr')].find(r => r.dataset.pn === code.toUpperCase());
+        if (!tr) {
+            const p = await SP.lookup(code);
+            if (!p) { msg.innerHTML = '<span class="text-danger">Part "' + SP.esc(code) + '" tidak ada di master data.</span>'; box.select(); return; }
+            // Part belum ada di daftar hitung (dibuat setelah sesi dimulai): tambahkan baris.
+            tr = document.createElement('tr');
+            tr.dataset.part = p.id; tr.dataset.pn = p.partNumber.toUpperCase(); tr.dataset.state = 'todo';
+            tr.dataset.text = (p.partNumber + ' ' + p.name + ' ' + (p.location || '')).toLowerCase();
+            tr.innerHTML = `<td class="nowrap">${SP.esc(p.location)}</td><td><b>${SP.esc(p.partNumber)}</b> <span class="small text-muted">${SP.esc(p.unit)}</span><div class="small text-muted">${SP.esc(p.name)}</div></td>
+                <td class="num sys">${SP.fmt(p.stockQty)}</td><td><input type="number" step="any" min="0" class="form-control form-control-sm cnt"></td>
+                <td class="num var"></td><td><input class="form-control form-control-sm note" maxlength="300"></td>
+                <td class="d-print-none"><button type="button" class="btn btn-sm btn-outline-primary py-0 save">Simpan</button></td>`;
+            tbl.querySelector('tbody').prepend(tr);
+        }
+        view.value = 'all'; find.value = ''; applyFilter();
+        tr.scrollIntoView({ block: 'center' });
+        const inp = tr.querySelector('.cnt'); inp.focus(); inp.select();
+        msg.innerHTML = 'Isi hasil hitung <b>' + SP.esc(tr.dataset.pn) + '</b> lalu Enter.';
+    }
+    if (box) {
+        box.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(box.value); } });
+        document.getElementById('btnCam').addEventListener('click', () => SP.scan(go));
+    }
+})();
+</script>
+}

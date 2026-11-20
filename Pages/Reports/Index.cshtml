@@ -1,0 +1,53 @@
+@page
+@model SparePartControl.Pages.Reports.IndexModel
+@inject SparePartControl.Services.AppSettingsService AppSettings
+@{ ViewData["Title"] = "Report"; }
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="page-title me-auto">Report <partial name="_SiteTitle" /></h1>
+    <a class="btn btn-outline-secondary btn-sm d-print-none" href="?handler=Export&Type=@Model.Type&From=@Model.From?.ToString("yyyy-MM-dd")&To=@Model.To?.ToString("yyyy-MM-dd")">Export CSV</a>
+    <button class="btn btn-outline-secondary btn-sm d-print-none" onclick="window.print()">🖨 Cetak</button>
+</div>
+<form method="get" class="card mb-3 d-print-none">
+    <div class="card-body py-2 row g-2 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label small mb-0">Jenis report</label>
+            <select name="Type" class="form-select form-select-sm" onchange="this.form.submit()">
+                @foreach (var t in SparePartControl.Pages.Reports.IndexModel.Types)
+                {
+                    <option value="@t.Key" selected="@(t.Key == Model.Type)">@t.Title</option>
+                }
+            </select>
+        </div>
+        @if (Model.UsesDates)
+        {
+            <div class="col-6 col-md-2"><label class="form-label small mb-0">Dari</label><input type="date" name="From" value="@Model.From?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+            <div class="col-6 col-md-2"><label class="form-label small mb-0">Sampai</label><input type="date" name="To" value="@Model.To?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+            <div class="col-md-2"><button class="btn btn-primary btn-sm" type="submit">Tampilkan</button></div>
+        }
+    </div>
+</form>
+<div class="card">
+    <div class="card-header bg-white fw-semibold">
+        @if (!string.IsNullOrWhiteSpace(AppSettings.Company.CompanyName)) { <div class="d-none d-print-block">@AppSettings.Company.CompanyName</div> }
+        @Model.Title @if (SiteCtx.MultiSiteSystem) { <span class="text-muted fw-normal d-none d-print-inline">· @(SiteCtx.Current == null ? "Semua site" : SiteCtx.Current.Code + " — " + SiteCtx.Current.Name)</span> }
+        @if (Model.UsesDates) { <span class="text-muted fw-normal">· @Model.From?.ToString("dd MMM yyyy") – @Model.To?.ToString("dd MMM yyyy")</span> }
+        <span class="text-muted fw-normal small float-end">per @DateTime.Now.ToString("dd MMM yyyy HH:mm")</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead><tr>@foreach (var c in Model.Cols) { <th class="@(c.Num ? "num" : "")">@c.Name</th> }</tr></thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    <tr>@for (var i = 0; i < r.Length; i++) { <td class="@(Model.Cols[i].Num ? "num" : "")">@r[i]</td> }</tr>
+                }
+                @if (Model.Rows.Count == 0) { <tr><td colspan="@Model.Cols.Count" class="text-center text-muted py-4">Tidak ada data.</td></tr> }
+            </tbody>
+            @if (Model.Footer != null && Model.Rows.Count > 0)
+            {
+                <tfoot><tr class="fw-semibold table-light">@for (var i = 0; i < Model.Footer.Length; i++) { <td class="@(Model.Cols[i].Num ? "num" : "")">@Model.Footer[i]</td> }</tr></tfoot>
+            }
+        </table>
+    </div>
+</div>
+<p class="small text-muted mt-2 d-print-none">Record stock checking per 6 bulan ada di menu <a asp-page="/StockChecks/Index">Stock Checking</a>; kartu stok lengkap di <a asp-page="/Transactions/Index">Riwayat</a>.</p>

@@ -1,0 +1,205 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+    var overdue = Model.OpenLoans.Count(l => l.IsOverdue);
+}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="page-title me-auto">Dashboard <partial name="_SiteTitle" /></h1>
+    @if (User.IsInRole("Admin") && SiteCtx.Allowed.Count > 0)
+    {
+        <a class="btn btn-primary btn-sm" href="/Entry/issue">+ Issued</a>
+        <a class="btn btn-outline-primary btn-sm" href="/Entry/in">+ Input</a>
+        <a class="btn btn-outline-primary btn-sm" href="/Entry/loan">+ Loan</a>
+    }
+</div>
+
+@* ---- Notifikasi ---- *@
+@{
+    var nEmpty = Model.Count(StockLevel.Empty); var nLow = Model.Count(StockLevel.Low); var nCrit = Model.Count(StockLevel.Critical);
+    string Codes(StockLevel l) { var x = Model.Alerts.Where(p => p.Level == l).Select(p => p.PartNumber).ToList(); return string.Join(", ", x.Take(6)) + (x.Count > 6 ? ", …" : ""); }
+}
+@if (nEmpty > 0)
+{
+    <div class="alert alert-danger d-flex align-items-center py-2 mb-2">
+        <div><b>⛔ @nEmpty part EMPTY (stok habis).</b> @Codes(StockLevel.Empty)</div>
+        <a class="btn btn-sm btn-danger ms-auto nowrap" href="/Parts?fStock=empty">Lihat</a>
+    </div>
+}
+@if (nLow > 0)
+{
+    <div class="alert alert-warning d-flex align-items-center py-2 mb-2 alert-low">
+        <div><b>⚠ @nLow part LOW (di bawah min).</b> @Codes(StockLevel.Low)</div>
+        <a class="btn btn-sm btn-warning ms-auto nowrap" href="/Parts?fStock=low">Lihat</a>
+    </div>
+}
+@if (nCrit > 0)
+{
+    <div class="alert alert-warning d-flex align-items-center py-2 mb-2">
+        <div><b>⚠ @nCrit part CRITICAL (sama dengan min).</b> @Codes(StockLevel.Critical)</div>
+        <a class="btn btn-sm btn-warning ms-auto nowrap" href="/Parts?fStock=critical">Lihat</a>
+    </div>
+}
+@if (overdue > 0)
+{
+    <div class="alert alert-warning d-flex align-items-center py-2 mb-2">
+        <div><b>⏰ @overdue loan melewati rencana tanggal kembali.</b></div>
+        <a class="btn btn-sm btn-warning ms-auto nowrap" asp-page="/Loans/Index">Lihat</a>
+    </div>
+}
+@if (SiteCtx.IsAll)
+{
+    var missing = Model.SiteRows.Where(r => r.Check == null).Select(r => r.Site.Code).ToList();
+    if (missing.Count > 0)
+    {
+        <div class="alert alert-info py-2 mb-2"><b>📋 Stock checking periode @Model.CurYear-S@(Model.CurSemester) belum dibuat di @missing.Count site:</b> @string.Join(", ", missing)</div>
+    }
+}
+else if (Model.CurrentCheck == null)
+{
+    <div class="alert alert-info d-flex align-items-center py-2 mb-2">
+        <div><b>📋 Stock checking periode @Model.CurYear-S@(Model.CurSemester) belum dibuat.</b>
+            @(Model.LastClosedCheck != null ? $"Terakhir: {Model.LastClosedCheck.Period}, ditutup {Model.LastClosedCheck.ClosedAt:dd MMM yyyy}." : "Belum pernah ada stock checking.")</div>
+        <a class="btn btn-sm btn-info ms-auto nowrap" asp-page="/StockChecks/Index">Mulai</a>
+    </div>
+}
+else if (Model.CurrentCheck.Status == StockCheckStatus.Open)
+{
+    <div class="alert alert-info d-flex align-items-center py-2 mb-2">
+        <div><b>📋 Stock checking @Model.CurrentCheck.Period sedang berjalan:</b> @Model.CheckProgress.Counted dari @Model.CheckProgress.Total item sudah dihitung.</div>
+        <a class="btn btn-sm btn-info ms-auto nowrap" asp-page="/StockChecks/Details" asp-route-id="@Model.CurrentCheck.Id">Lanjutkan</a>
+    </div>
+}
+
+@if (SiteCtx.IsAll && Model.SiteRows.Count > 0)
+{
+    <div class="card mt-3">
+        <div class="card-header bg-white fw-semibold">Ringkasan per Site</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead><tr><th>Site</th><th class="num">Item</th><th class="num">Value ACTIVE (USD)</th><th class="num">Value INACTIVE (USD)</th><th class="num">Perlu Restock</th><th class="num">Overstock</th><th>Stock Checking @Model.CurYear-S@(Model.CurSemester)</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in Model.SiteRows)
+                    {
+                        <tr>
+                            <td><span class="site-tag">@r.Site.Code</span> @r.Site.Name</td>
+                            <td class="num">@r.Parts.ToString("N0")</td>
+                            <td class="num">@r.ActiveValue.ToString("N2")</td>
+                            <td class="num">@r.InactiveValue.ToString("N2")</td>
+                            <td class="num">@if (r.Restock > 0) { <b class="text-danger">@r.Restock</b> } else { <span>0</span> }</td>
+                            <td class="num">@r.Overstock</td>
+                            <td>@(r.Check == null ? "belum dibuat" : r.Check.Status == StockCheckStatus.Open ? "berjalan" : "selesai")</td>
+                            <td><a class="btn btn-sm btn-outline-primary py-0" href="/site/switch?id=@r.Site.Id&returnUrl=%2F">Buka</a></td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot><tr class="fw-semibold table-light"><td>TOTAL</td><td class="num">@Model.SiteRows.Sum(r => r.Parts).ToString("N0")</td><td class="num">@Model.SiteRows.Sum(r => r.ActiveValue).ToString("N2")</td><td class="num">@Model.SiteRows.Sum(r => r.InactiveValue).ToString("N2")</td><td class="num">@Model.SiteRows.Sum(r => r.Restock)</td><td class="num">@Model.SiteRows.Sum(r => r.Overstock)</td><td colspan="2"></td></tr></tfoot>
+            </table>
+        </div>
+    </div>
+}
+
+<div class="row g-3 mt-0 mb-3">
+    <div class="col-6 col-lg-2"><div class="card stat h-100"><div class="label">Total Item</div><div class="value">@Model.TotalParts.ToString("N0")</div><div class="sub">@Model.ActiveParts active · @Model.NonActiveParts inactive</div></div></div>
+    <div class="col-6 col-lg-2"><div class="card stat h-100"><div class="label">Stock Value ACTIVE</div><div class="value">$@Model.ActiveValue.ToString("N0")</div><div class="sub">USD</div></div></div>
+    <div class="col-6 col-lg-2"><div class="card stat h-100"><div class="label">Stock Value INACTIVE</div><div class="value">$@Model.NonActiveValue.ToString("N0")</div><div class="sub">USD</div></div></div>
+    <div class="col-6 col-lg-2"><a class="card stat h-100 text-decoration-none text-reset" href="/Parts?fStock=alert"><div class="label">⚠ Perlu Restock</div><div class="value">@Model.Alerts.Count</div><div class="sub">@nEmpty empty · @nLow low · @nCrit critical</div></a></div>
+    <div class="col-6 col-lg-2"><a class="card stat h-100 text-decoration-none text-reset" href="/Parts?fStock=over"><div class="label">Overstock</div><div class="value">@Model.OverstockCount</div><div class="sub">di atas max stock</div></a></div>
+    <div class="col-6 col-lg-2"><a class="card stat h-100 text-decoration-none text-reset" asp-page="/Loans/Index"><div class="label">Loan Belum Kembali</div><div class="value">@Model.OpenLoans.Count</div><div class="sub">@overdue terlambat</div></a></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-white fw-semibold">Perlu Restock <span class="text-muted fw-normal small">· EMPTY, LOW &amp; CRITICAL — semua part (active &amp; inactive)</span></div>
+            <div class="table-responsive" style="max-height:330px">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Part</th><th>rackName</th><th class="num">now</th><th class="num">min</th><th class="num">max</th><th class="num" title="Max − now">Saran order</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in Model.Alerts)
+                        {
+                            <tr>
+                                <td>@if (SiteCtx.IsAll) { <span class="site-tag">@SiteCtx.CodeOf(p.SiteId)</span> } <a asp-page="/Parts/Details" asp-route-id="@p.Id">@p.PartNumber</a><div class="small text-muted">@p.Name · @p.Supplier</div></td>
+                                <td class="nowrap small">@p.Location</td>
+                                <td class="num"><b>@StockService.Fmt(p.StockQty)</b></td>
+                                <td class="num">@StockService.Fmt(p.MinStock)</td>
+                                <td class="num">@StockService.Fmt(p.MaxStock)</td>
+                                <td class="num">@StockService.Fmt(p.SuggestedOrder)</td>
+                                <td><partial name="_LevelBadge" model="p.Level" /></td>
+                            </tr>
+                        }
+                        @if (Model.Alerts.Count == 0) { <tr><td colspan="7" class="text-center text-muted py-4">✓ Tidak ada part EMPTY / LOW / CRITICAL.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-white fw-semibold">Nilai Pemakaian (Issued) per Bulan, USD <span class="text-muted fw-normal small">· bulan ini $@Model.IssuedThisMonth.ToString("N2")</span></div>
+            <div class="card-body">
+                <div style="height:240px"><canvas id="chart" aria-label="Grafik nilai pemakaian per bulan"></canvas></div>
+                <details class="small mt-2"><summary class="text-muted">Lihat sebagai tabel</summary>
+                    <table class="table table-sm mb-0 w-auto">
+                        @foreach (var m in Model.Monthly) { <tr><td>@m.Label</td><td class="num">@m.Value.ToString("N2")</td></tr> }
+                    </table>
+                </details>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-white fw-semibold d-flex">Transaksi Terakhir <a class="ms-auto small fw-normal" asp-page="/Transactions/Index">Semua riwayat →</a></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Tanggal</th><th>Tipe</th><th>No. Dokumen</th><th>Part</th><th class="num">Qty</th><th>PIC</th><th>Mesin / Dept</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in Model.Recent)
+                        {
+                            <tr>
+                                <td class="nowrap">@t.Date.ToString("dd MMM yyyy HH:mm")</td>
+                                <td><partial name="_TxBadge" model="t.Type" /></td>
+                                <td class="nowrap">@t.DocNo</td>
+                                <td>@if (SiteCtx.IsAll) { <span class="site-tag">@SiteCtx.CodeOf(t.SiteId)</span> } <a asp-page="/Parts/Details" asp-route-id="@t.PartId">@t.Part.PartNumber</a> <span class="small text-muted">@t.Part.Name</span></td>
+                                <td class="num @(t.Qty < 0 ? "text-danger" : "text-success")">@(t.Qty > 0 ? "+" : "")@StockService.Fmt(t.Qty) <span class="small text-muted">@t.Part.Unit</span></td>
+                                <td>@t.Pic</td>
+                                <td>@t.Department</td>
+                            </tr>
+                        }
+                        @if (Model.Recent.Count == 0) { <tr><td colspan="7" class="text-center text-muted py-4">Belum ada transaksi.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/lib/chartjs/chart.umd.js"></script>
+<script>
+    new Chart(document.getElementById('chart'), {
+        type: 'bar',
+        data: {
+            labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Monthly.Select(m => m.Label))),
+            datasets: [{
+                label: 'Nilai Issued (USD)',
+                data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Monthly.Select(m => Math.Round(m.Value, 2)))),
+                backgroundColor: '#2a78d6', hoverBackgroundColor: '#1c5cab',
+                borderRadius: { topLeft: 4, topRight: 4 }, maxBarThickness: 44
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: c => ' $' + c.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2 }) } }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#52514e' } },
+                y: { beginAtZero: true, border: { display: false }, grid: { color: '#e9ebee' },
+                     ticks: { color: '#52514e', maxTicksLimit: 5, callback: v => '$' + v.toLocaleString('en-US') } }
+            }
+        }
+    });
+</script>
+}

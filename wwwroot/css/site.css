@@ -1,0 +1,80 @@
+:root { --app-ink: #1f2a37; --app-accent: #2a78d6; }
+html { font-size: 14px; }
+body { background: #f5f6f8; color: var(--app-ink); }
+.app-nav { background: #1f2a37; }
+.app-nav .nav-link.active { color: #fff; border-bottom: 2px solid #6da7ec; }
+.card { border: 1px solid #e3e6ea; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.page-title { font-size: 1.35rem; font-weight: 600; margin: 0; }
+.stat { padding: .9rem 1rem; }
+.stat .label { font-size: .8rem; color: #5b6573; }
+.stat .value { font-size: 1.6rem; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.stat .sub { font-size: .78rem; color: #5b6573; }
+.table { font-variant-numeric: tabular-nums; }
+.table thead th { white-space: nowrap; font-size: .8rem; text-transform: uppercase; letter-spacing: .02em; color: #5b6573; background: #f8f9fb; }
+.table thead th a { color: inherit; text-decoration: none; }
+.table td, .table th { vertical-align: middle; }
+.filter-row th { background: #fff !important; padding: .25rem !important; }
+.filter-row .form-control, .filter-row .form-select { font-size: .8rem; padding: .15rem .35rem; min-width: 70px; }
+.num { text-align: right; white-space: nowrap; }
+.nowrap { white-space: nowrap; }
+.badge-out { background: #d03b3b; }
+.badge-min { background: #fab219; color: #3d2c00; }
+.badge-ok { background: #e7f4e7; color: #0b6b0b; }
+.badge-soft { background: #e9eef5; color: #33475b; }
+.suggest { position: absolute; z-index: 20; left: 0; right: 0; max-height: 300px; overflow: auto; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+.row-warn td { background: #fff4f4 !important; }
+#qrReader { width: 100%; }
+
+/* Label QR — ukuran dalam mm supaya hasil cetak sesuai ukuran stiker */
+.label-sheet { display: flex; flex-wrap: wrap; gap: 2mm; }
+.qr-label { background: #fff; color: #000; border: 1px dashed #9aa3af; border-radius: 1mm; display: flex; align-items: center; overflow: hidden; break-inside: avoid; box-sizing: border-box; }
+.qr-label img { flex: none; image-rendering: pixelated; }
+.qr-label .txt { min-width: 0; overflow: hidden; }
+.qr-label .pn { font-weight: 700; word-break: break-all; line-height: 1.1; }
+.qr-label .nm, .qr-label .sp, .qr-label .lc { line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
+.qr-label .lc { font-weight: 600; }
+.size-s .qr-label { width: 40mm; height: 20mm; padding: 1mm; gap: 1.5mm; }
+.size-s .qr-label img { width: 17mm; height: 17mm; }
+.size-s .pn { font-size: 7.5pt; } .size-s .nm { font-size: 5.5pt; -webkit-line-clamp: 2; } .size-s .lc { font-size: 6pt; -webkit-line-clamp: 1; }
+.size-m .qr-label { width: 60mm; height: 30mm; padding: 1.5mm; gap: 2mm; }
+.size-m .qr-label img { width: 26mm; height: 26mm; }
+.size-m .pn { font-size: 10pt; } .size-m .nm { font-size: 7.5pt; -webkit-line-clamp: 3; } .size-m .lc { font-size: 8pt; -webkit-line-clamp: 1; margin-top: .5mm; }
+.size-l .qr-label { width: 100mm; height: 50mm; padding: 3mm; gap: 4mm; }
+.size-l .qr-label img { width: 43mm; height: 43mm; }
+.size-l .pn { font-size: 17pt; } .size-l .nm { font-size: 11pt; -webkit-line-clamp: 2; margin-top: 1mm; } .size-l .sp { font-size: 9pt; -webkit-line-clamp: 2; color: #333; } .size-l .lc { font-size: 12pt; -webkit-line-clamp: 1; margin-top: 1.5mm; }
+@page { margin: 3mm; } /* A4 muat 2 kolom label besar (100 mm) */
+@media print {
+    body { background: #fff; }
+    main.container-fluid { padding: 0 !important; }
+    .card { border: 0; box-shadow: none; }
+    a { text-decoration: none; color: inherit; }
+}
+
+/* Lokasi rak */
+.loc-chip { display: inline-block; padding: .1rem .45rem; border-radius: 4px; background: #e9eef5; color: #1f2a37; font-weight: 600; white-space: nowrap; }
+.loc-chip.blink { animation: locblink .45s steps(1) 8; }
+@keyframes locblink { 0%, 100% { background: #e9eef5; color: #1f2a37; } 50% { background: #fab219; color: #3d2c00; box-shadow: 0 0 0 4px rgba(250, 178, 25, .35); } }
+
+/* Gambar spare part */
+.part-img { aspect-ratio: 4 / 3; background: #f1f3f6; border: 1px solid #e3e6ea; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.part-img a { display: flex; width: 100%; height: 100%; }
+.part-img img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.part-img-form { width: 200px; flex: none; }
+.thumb { width: 30px; height: 30px; object-fit: cover; border-radius: 4px; border: 1px solid #e3e6ea; background: #fff; flex: none; }
+.thumb-empty { display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; opacity: .35; background: #f1f3f6; }
+
+/* Status stok (sama dengan kolom Status di Excel) */
+.lv { font-weight: 600; letter-spacing: .02em; }
+.lv-empty { background: #d03b3b; color: #fff; }
+.lv-low { background: #ec835a; color: #fff; }
+.lv-critical { background: #fab219; color: #3d2c00; }
+.lv-normal { background: #e7f4e7; color: #0b6b0b; }
+.lv-over { background: #e3ecfa; color: #1c5cab; }
+.master td { font-size: .86rem; }
+.master .name-col { min-width: 220px; }
+.master td:nth-child(8) { min-width: 170px; }
+.master td:nth-child(6) { min-width: 150px; }
+.brand-co { font-size: .7rem; font-weight: 400; opacity: .75; margin-top: 2px; }
+.site-btn { background: #2d3b4d; color: #fff; border: 1px solid #4a5a70; }
+.site-btn:hover, .site-btn:focus { background: #3a4b61; color: #fff; }
+.site-tag { font-family: var(--bs-font-monospace); font-size: .75rem; background: #e9eef5; color: #33475b; border-radius: 3px; padding: 0 .3rem; white-space: nowrap; }

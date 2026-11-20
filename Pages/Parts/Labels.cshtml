@@ -1,0 +1,126 @@
+@page
+@model SparePartControl.Pages.Parts.LabelsModel
+@{
+    ViewData["Title"] = "Label QR";
+    var qrPx = Model.Size == "l" ? 10 : 8;
+    var hasDoc = !string.IsNullOrWhiteSpace(Model.Doc);
+}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3 d-print-none">
+    <h1 class="page-title me-auto">Cetak Label QR
+        @if (hasDoc) { <span class="text-muted fw-normal">· barang datang @Model.Doc</span> }
+    </h1>
+    @if (Model.Items.Count > 0) { <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Cetak @Model.TotalLabels label</button> }
+    <a class="btn btn-outline-secondary btn-sm" asp-page="Index">Master Data</a>
+</div>
+
+<form method="get" class="card mb-3 d-print-none" id="optForm">
+    @foreach (var kv in Request.Query.Where(k => k.Key is not ("size" or "copies" or "perQty")))
+    {
+        foreach (var v in kv.Value) { <input type="hidden" name="@kv.Key" value="@v" /> }
+    }
+    <div class="card-body py-2 row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small mb-0">Ukuran label</label>
+            <select name="size" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="s" selected="@(Model.Size == "s")">Kecil 40 × 20 mm — ditempel di part</option>
+                <option value="m" selected="@(Model.Size == "m")">Sedang 60 × 30 mm — wadah / kantong part kecil</option>
+                <option value="l" selected="@(Model.Size == "l")">Besar 100 × 50 mm — drawer / box / rak</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small mb-0">Jumlah per part</label>
+            <input type="number" name="copies" value="@Model.Copies" min="1" max="100" class="form-control form-control-sm" disabled="@Model.PerQty" onchange="this.form.submit()" />
+        </div>
+        @if (hasDoc)
+        {
+            <div class="col-6 col-md-3">
+                <div class="form-check mb-1">
+                    <input class="form-check-input" type="checkbox" name="perQty" value="true" id="perQty" checked="@Model.PerQty" onchange="this.form.submit()" />
+                    <label class="form-check-label small" for="perQty">Satu label per qty diterima<br /><span class="text-muted">(untuk ditempel di tiap part)</span></label>
+                </div>
+            </div>
+        }
+        <div class="col-md-3 ms-auto">
+            <label class="form-label small mb-0">Tambah part ke daftar cetak</label>
+            <div class="position-relative">
+                <div class="input-group input-group-sm">
+                    <input class="form-control" id="addBox" placeholder="Scan / ketik part number, Enter" autocomplete="off" />
+                    <button class="btn btn-outline-secondary" type="button" id="btnCam">📷</button>
+                </div>
+                <div class="list-group suggest" id="suggest"></div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@if (Model.Truncated)
+{
+    <div class="alert alert-warning py-2 d-print-none">Dibatasi @SparePartControl.Pages.Parts.LabelsModel.MaxLabels label per cetak. Persempit filter atau kurangi jumlah per part.</div>
+}
+@if (Model.Items.Count == 0)
+{
+    <div class="card d-print-none"><div class="card-body text-muted">
+        @if (Model.HasSource) { <span>Tidak ada part untuk dicetak.</span> }
+        else
+        {
+            <span>Belum ada part di daftar cetak. Scan atau ketik part number di kotak <b>Tambah part</b>, atau pilih part dari
+            <a asp-page="Index">Master Data</a> (centang → <b>Cetak Label QR</b>). Setelah menyimpan <b>Form Input</b> (barang datang), tombol cetak label muncul otomatis.</span>
+        }
+    </div></div>
+}
+else
+{
+    <p class="small text-muted d-print-none mb-2">
+        @Model.Items.Count part · <b>@Model.TotalLabels label</b>. Garis putus-putus adalah garis potong.
+        Saat mencetak pilih skala <b>100% / Actual size</b> agar ukuran label tepat. Part kecil: tempel label di wadah atau drawer-nya.
+    </p>
+    <div class="label-sheet size-@Model.Size">
+        @foreach (var (p, n) in Model.Items)
+        {
+            for (var i = 0; i < n; i++)
+            {
+                <div class="qr-label">
+                    <img src="/qr?c=@Uri.EscapeDataString(p.PartNumber)&s=@qrPx" alt="QR @p.PartNumber" />
+                    <div class="txt">
+                        <div class="pn">@p.PartNumber</div>
+                        <div class="nm">@p.Name</div>
+                        @if (Model.Size == "l" && !string.IsNullOrWhiteSpace(p.Specification)) { <div class="sp">@p.Specification</div> }
+                        <div class="lc">@(SiteCtx.MultiSiteSystem ? SiteCtx.CodeOf(p.SiteId) + " · " : "")@(string.IsNullOrWhiteSpace(p.Location) ? "" : "Lok: " + p.Location)@(p.Condition == PartCondition.Second ? " · 2ND" : "")@(p.IsReusable ? " · ♻" : "")</div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@section Scripts {
+<script>
+(function () {
+    const box = document.getElementById('addBox'), sug = document.getElementById('suggest');
+    // Menambah part: pindah ke mode daftar pilihan (ids) sambil mempertahankan ukuran & jumlah.
+    function add(id) {
+        const q = new URLSearchParams(location.search), keep = new URLSearchParams();
+        for (const k of ['size', 'copies']) if (q.get(k)) keep.set(k, q.get(k));
+        const ids = new Set([...@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items.Select(i => i.Part.Id)))].map(String));
+        ids.add(String(id));
+        ids.forEach(i => keep.append('ids', i));
+        location.href = '/Parts/Labels?' + keep.toString();
+    }
+    function show(list) {
+        sug.innerHTML = list.map(p => `<button type="button" class="list-group-item list-group-item-action py-1" data-id="${p.id}"><b>${SP.esc(p.partNumber)}</b> — ${SP.esc(p.name)}</button>`).join('');
+    }
+    async function submit(code) {
+        code = code.trim(); if (!code) return;
+        const p = await SP.lookup(code);
+        if (p) return add(p.id);
+        const list = await SP.search(code);
+        if (list.length === 1) add(list[0].id); else show(list);
+    }
+    let t;
+    box.addEventListener('input', () => { clearTimeout(t); const v = box.value.trim(); if (v.length < 2) return show([]); t = setTimeout(async () => show(await SP.search(v)), 250); });
+    box.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); submit(box.value); } });
+    sug.addEventListener('click', e => { const b = e.target.closest('button'); if (b) add(b.dataset.id); });
+    document.getElementById('btnCam').addEventListener('click', () => SP.scan(submit));
+})();
+</script>
+}

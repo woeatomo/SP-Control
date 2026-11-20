@@ -1,0 +1,132 @@
+@inject SparePartControl.Services.AppSettingsService AppSettings
+@{
+    var path = Context.Request.Path.Value ?? "/";
+    var isAuth = User.Identity?.IsAuthenticated == true;
+    var isAdmin = User.IsInRole("Admin");
+    string Act(string p) => (p == "/" ? path == "/" : path.StartsWith(p, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
+}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] · @AppSettings.Company.AppTitle</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark app-nav d-print-none">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-semibold lh-1" asp-page="/Index">⚙ @AppSettings.Company.AppTitle
+                @if (!string.IsNullOrWhiteSpace(AppSettings.Company.CompanyName)) { <div class="brand-co">@AppSettings.Company.CompanyName</div> }
+            </a>
+            @if (isAuth) {
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="nav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link @Act("/")" asp-page="/Index">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link @(path.StartsWith("/Parts") && !path.StartsWith("/Parts/Labels") ? "active" : "")" asp-page="/Parts/Index">Master Data</a></li>
+                    <li class="nav-item"><a class="nav-link @Act("/Parts/Labels")" asp-page="/Parts/Labels">Label QR</a></li>
+                    @if (isAdmin)
+                    {
+                        <li class="nav-item"><a class="nav-link @Act("/Entry/issue")" href="/Entry/issue">Issued</a></li>
+                        <li class="nav-item"><a class="nav-link @Act("/Entry/in")" href="/Entry/in">Input</a></li>
+                    }
+                    <li class="nav-item"><a class="nav-link @(Act("/Entry/loan") + Act("/Loans"))" asp-page="/Loans/Index">Loan</a></li>
+                    <li class="nav-item"><a class="nav-link @Act("/Transactions")" asp-page="/Transactions/Index">Riwayat</a></li>
+                    <li class="nav-item"><a class="nav-link @Act("/StockChecks")" asp-page="/StockChecks/Index">Stock Checking</a></li>
+                    <li class="nav-item"><a class="nav-link @Act("/Reports")" asp-page="/Reports/Index">Report</a></li>
+                    @if (isAdmin && SiteCtx.IsSuperAdmin)
+                    {
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle @(Act("/Settings") + Act("/Users"))" href="#" role="button" data-bs-toggle="dropdown">Pengaturan</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-page="/Settings/General">Perusahaan &amp; Format Kode</a></li>
+                                <li><a class="dropdown-item" asp-page="/Settings/Sites">Site / Section</a></li>
+                                <li><a class="dropdown-item" asp-page="/Settings/Rates">Kurs</a></li>
+                                <li><a class="dropdown-item" asp-page="/Users/Index">User</a></li>
+                            </ul>
+                        </li>
+                    }
+                </ul>
+                @{ var here = Context.Request.Path + Context.Request.QueryString; }
+                @if (SiteCtx.HasMultiple)
+                {
+                    <div class="dropdown me-2">
+                        <button class="btn btn-sm site-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" title="Site aktif">
+                            🏭 @(SiteCtx.Current == null ? "Semua site" : SiteCtx.Current.Code)
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            @foreach (var s in SiteCtx.Allowed)
+                            {
+                                <li><a class="dropdown-item @(SiteCtx.Current?.Id == s.Id ? "active" : "")" href="/site/switch?id=@s.Id&returnUrl=@Uri.EscapeDataString(here)"><span class="font-monospace">@s.Code</span> — @s.Name</a></li>
+                            }
+                            <li><hr class="dropdown-divider" /></li>
+                            <li><a class="dropdown-item @(SiteCtx.IsAll ? "active" : "")" href="/site/switch?id=all&returnUrl=@Uri.EscapeDataString(here)">Semua site <span class="small text-muted">(lihat gabungan)</span></a></li>
+                        </ul>
+                    </div>
+                }
+                else if (SiteCtx.Current != null && SiteCtx.MultiSiteSystem)
+                {
+                    <span class="badge site-btn me-2">🏭 @SiteCtx.Current.Code</span>
+                }
+                <form class="d-flex me-2" method="get" action="/Parts">
+                    <input class="form-control form-control-sm" name="q" placeholder="Cari part…" aria-label="Cari part" />
+                </form>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        👤 @User.Identity!.Name <span class="badge @(isAdmin ? "bg-primary" : "bg-secondary")">@(isAdmin ? "Admin" : "Viewer")</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" asp-page="/Account/Password">Ganti Password</a></li>
+                        <li>
+                            <form method="post" asp-page="/Account/Login" asp-page-handler="Logout">
+                                <button class="dropdown-item" type="submit">Logout</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            }
+        </div>
+    </nav>
+
+    <main class="container-fluid py-3 px-3 px-lg-4">
+        @if (TempData["Ok"] is string ok)
+        {
+            <div class="alert alert-success alert-dismissible d-print-none">@ok
+                @if (TempData["OkLink"] is string okLink) { <a class="btn btn-sm btn-success ms-2" href="@okLink" target="_blank">🏷 @TempData["OkLinkText"]</a> }
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+        }
+        @if (TempData["Err"] is string err)
+        {
+            <div class="alert alert-danger alert-dismissible d-print-none">@err<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+        }
+        @RenderBody()
+    </main>
+
+    <!-- Modal scanner kamera (dipakai semua halaman) -->
+    <div class="modal fade" id="scanModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">Scan QR Code</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="qrReader"></div>
+                    <div id="scanMsg" class="small text-muted mt-2">Arahkan kamera ke QR code part.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/html5-qrcode/html5-qrcode.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

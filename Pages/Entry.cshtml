@@ -1,0 +1,165 @@
+@page "/Entry/{mode:regex(^(issue|in|loan)$)}"
+@model SparePartControl.Pages.EntryModel
+@{ ViewData["Title"] = Model.Title; }
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="page-title me-auto">@Model.Title <partial name="_SiteTitle" /></h1>
+    <div class="btn-group btn-group-sm">
+        <a class="btn @(Model.Mode == "issue" ? "btn-primary" : "btn-outline-primary")" href="/Entry/issue">Issued</a>
+        <a class="btn @(Model.Mode == "in" ? "btn-primary" : "btn-outline-primary")" href="/Entry/in">Input</a>
+        <a class="btn @(Model.Mode == "loan" ? "btn-primary" : "btn-outline-primary")" href="/Entry/loan">Loan</a>
+    </div>
+</div>
+
+<form method="post" id="entryForm">
+    <div asp-validation-summary="All" class="alert alert-danger py-2" style="@(ViewData.ModelState.IsValid ? "display:none" : "")"></div>
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header bg-white fw-semibold">Data Transaksi</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label">Tanggal</label>
+                        <input type="datetime-local" class="form-control" asp-for="Header.Date" asp-format="{0:yyyy-MM-ddTHH:mm}" required />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">@(Model.EntryMode switch { EntryMode.In => "Diterima oleh / PIC", EntryMode.Loan => "PIC Peminjam *", _ => "PIC Maintenance (peminta) *" })</label>
+                        <input class="form-control" asp-for="Header.Pic" list="picList" autocomplete="off" required="@Model.IsOut" maxlength="100" />
+                        <datalist id="picList">@foreach (var x in Model.Pics) { <option value="@x"></option> }</datalist>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">@(Model.IsOut ? "Mesin / Line / Departemen" : "Supplier / Sumber")</label>
+                        <input class="form-control" asp-for="Header.Department" list="deptList" autocomplete="off" maxlength="120" />
+                        <datalist id="deptList">@foreach (var x in Model.Departments) { <option value="@x"></option> }</datalist>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">@(Model.IsOut ? "No. Work Order / Referensi" : "No. PO / Surat Jalan")</label>
+                        <input class="form-control" asp-for="Header.Reference" maxlength="100" />
+                    </div>
+                    @if (Model.EntryMode == EntryMode.Loan)
+                    {
+                        <div class="mb-2">
+                            <label class="form-label">Rencana Kembali</label>
+                            <input type="date" class="form-control" asp-for="Header.DueDate" asp-format="{0:yyyy-MM-dd}" />
+                        </div>
+                    }
+                    <div class="mb-0">
+                        <label class="form-label">Catatan</label>
+                        <textarea class="form-control" rows="2" asp-for="Header.Notes" maxlength="300"></textarea>
+                    </div>
+                    @if (Model.EntryMode == EntryMode.In)
+                    {
+                        <div class="form-text mt-2">Untuk part bekas yang dikembalikan dan masih layak pakai, input ke part number berkondisi <b>2nd</b> / bertanda ♻.</div>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <div class="position-relative">
+                        <div class="input-group">
+                            <input class="form-control" id="scanBox" placeholder="Scan QR / ketik part number atau nama, lalu Enter" autocomplete="off" autofocus />
+                            <button class="btn btn-outline-secondary" type="button" id="btnCam">📷 Kamera</button>
+                        </div>
+                        <div class="list-group suggest" id="suggest"></div>
+                    </div>
+                    <div class="small mt-1" id="scanInfo"></div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Part</th><th class="num">Stok</th><th style="width:120px">Qty</th><th>Catatan</th><th></th></tr></thead>
+                        <tbody id="lineBody"></tbody>
+                    </table>
+                </div>
+                <div class="card-footer d-flex align-items-center gap-2">
+                    <span class="small text-muted me-auto" id="lineCount"></span>
+                    <button class="btn btn-primary" type="submit" id="btnSave">Simpan @(Model.EntryMode switch { EntryMode.In => "Input", EntryMode.Loan => "Loan", _ => "Issued" })</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+<script>
+(function () {
+    const isOut = @(Model.IsOut ? "true" : "false");
+    let lines = @Html.Raw(Model.InitialLinesJson);
+    const body = document.getElementById('lineBody'), box = document.getElementById('scanBox'),
+        sug = document.getElementById('suggest'), info = document.getElementById('scanInfo');
+
+    function render() {
+        body.innerHTML = lines.map((l, i) => {
+            const over = isOut && Number(l.qty) > Number(l.stockQty);
+            return `<tr class="${over ? 'row-warn' : ''}">
+                <td><input type="hidden" name="Lines[${i}].PartId" value="${l.id}">
+                    <b>${SP.esc(l.partNumber)}</b> ${l.isReusable ? '<span class="badge badge-soft">♻</span>' : ''} ${l.condition === 'Second' ? '<span class="badge bg-secondary">2nd</span>' : ''}
+                    <div class="small text-muted">${SP.esc(l.name)}${l.location ? ' · ' + SP.esc(l.location) : ''}</div></td>
+                <td class="num">${SP.fmt(l.stockQty)} <span class="small text-muted">${SP.esc(l.unit)}</span>${over ? '<div class="small text-danger">stok kurang</div>' : ''}</td>
+                <td><input type="number" class="form-control form-control-sm qty" data-i="${i}" name="Lines[${i}].Qty" value="${l.qty}" min="0.01" step="any" required></td>
+                <td><input class="form-control form-control-sm note" data-i="${i}" name="Lines[${i}].Note" value="${SP.esc(l.note)}" maxlength="150"></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger py-0 del" data-i="${i}" title="Hapus baris">✕</button></td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="5" class="text-center text-muted py-4">Belum ada part. Scan QR atau cari part di atas.</td></tr>';
+        document.getElementById('lineCount').textContent = lines.length + ' item';
+    }
+
+    function add(p) {
+        const ex = lines.find(l => l.id === p.id);
+        if (ex) ex.qty = Number(ex.qty) + 1;
+        else lines.push({ ...p, qty: 1, note: '' });
+        info.innerHTML = `<span class="text-success">✓ ${SP.esc(p.partNumber)} — ${SP.esc(p.name)}</span>`;
+        render();
+    }
+
+    function showSuggest(list) {
+        sug.innerHTML = list.map(p => `<button type="button" class="list-group-item list-group-item-action py-1" data-id="${p.id}">
+            <b>${SP.esc(p.partNumber)}</b> — ${SP.esc(p.name)} <span class="small text-muted">(stok ${SP.fmt(p.stockQty)} ${SP.esc(p.unit)})</span></button>`).join('');
+        sug._list = list;
+    }
+
+    async function submitCode(code) {
+        code = code.trim();
+        if (!code) return;
+        const p = await SP.lookup(code);
+        if (p) { add(p); box.value = ''; showSuggest([]); box.focus(); return; }
+        const list = await SP.search(code);
+        if (list.length === 1) { add(list[0]); box.value = ''; showSuggest([]); }
+        else if (list.length === 0) { info.innerHTML = `<span class="text-danger">Part "${SP.esc(code)}" tidak ditemukan di master data.</span>`; showSuggest([]); box.select(); }
+        else showSuggest(list);
+    }
+
+    let timer;
+    box.addEventListener('input', () => {
+        clearTimeout(timer);
+        const v = box.value.trim();
+        if (v.length < 2) { showSuggest([]); return; }
+        timer = setTimeout(async () => { if (box.value.trim() === v) showSuggest(await SP.search(v)); }, 250);
+    });
+    // Scanner USB mengirim teks + Enter: jangan sampai Enter men-submit form.
+    box.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); submitCode(box.value); }
+        if (e.key === 'Escape') showSuggest([]);
+    });
+    sug.addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        add(sug._list.find(p => p.id == b.dataset.id)); box.value = ''; showSuggest([]); box.focus();
+    });
+    body.addEventListener('input', e => {
+        const i = e.target.dataset.i; if (i === undefined) return;
+        if (e.target.classList.contains('qty')) lines[i].qty = e.target.value;
+        if (e.target.classList.contains('note')) lines[i].note = e.target.value;
+    });
+    body.addEventListener('change', e => { if (e.target.classList.contains('qty')) render(); });
+    body.addEventListener('click', e => {
+        const b = e.target.closest('.del'); if (!b) return;
+        lines.splice(Number(b.dataset.i), 1); render();
+    });
+    document.getElementById('btnCam').addEventListener('click', () => SP.scan(submitCode));
+    document.getElementById('entryForm').addEventListener('submit', e => {
+        if (lines.length === 0) { e.preventDefault(); info.innerHTML = '<span class="text-danger">Tambahkan minimal satu part.</span>'; box.focus(); }
+    });
+    render();
+})();
+</script>
+}

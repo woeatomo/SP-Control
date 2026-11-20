@@ -1,0 +1,156 @@
+@page
+@model SparePartControl.Pages.Settings.GeneralModel
+@{ ViewData["Title"] = "Pengaturan"; var c = Model.Code; }
+<h1 class="page-title mb-3">Pengaturan</h1>
+@if (Model.Errors.Count > 0)
+{
+    <div class="alert alert-danger py-2"><ul class="mb-0">@foreach (var e in Model.Errors) { <li>@e</li> }</ul></div>
+}
+<form method="post" id="setForm">
+<div class="row g-3">
+    <div class="col-xl-4">
+        <div class="card h-100">
+            <div class="card-header bg-white fw-semibold">Perusahaan</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label" asp-for="Company.CompanyName">Nama perusahaan</label>
+                    <input class="form-control" asp-for="Company.CompanyName" maxlength="100" placeholder="mis. PT Contoh Manufaktur Indonesia" />
+                    <div class="form-text">Tampil di menu atas, halaman login, dan judul report saat dicetak.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label" asp-for="Company.AppTitle">Judul aplikasi</label>
+                    <input class="form-control" asp-for="Company.AppTitle" maxlength="60" />
+                </div>
+                <hr />
+                <div class="small text-muted">Pengaturan lain: <a asp-page="/Settings/Sites">Site / Section</a> · <a asp-page="/Settings/Rates">Kurs</a> · <a asp-page="/Users/Index">User</a></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header bg-white fw-semibold">Format Goods Code (generator kode part)</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-7">
+                        <label class="form-label" asp-for="Code.Pattern">Pola kode</label>
+                        <input class="form-control font-monospace cfg" asp-for="Code.Pattern" maxlength="80" />
+                        <div class="mt-1 d-flex flex-wrap gap-1">
+                            @foreach (var t in CodeSettings.Tokens)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 font-monospace tok">@t</button>
+                            }
+                        </div>
+                        <div class="form-text"><code>{SITE}</code> = kode site; <code>{PREFIX}</code> bisa dibedakan per site di menu <a asp-page="Sites">Site / Section</a>. Klik token untuk menyisipkan. Teks lain (mis. <code>-</code>, <code>/</code>, <code>SP</code>) dipakai apa adanya. Wajib ada satu <code>{SEQ}</code>.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" asp-for="Code.Prefix">Isi {PREFIX}</label>
+                        <input class="form-control font-monospace cfg" asp-for="Code.Prefix" maxlength="20" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" asp-for="Code.SeqDigits">Digit {SEQ}</label>
+                        <input class="form-control cfg" asp-for="Code.SeqDigits" type="number" min="1" max="9" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Nomor urut {SEQ}</label>
+                        <div class="form-check">
+                            <input class="form-check-input cfg" type="radio" name="Code.SeqPerGroup" id="seqG" value="true" checked="@c.SeqPerGroup" />
+                            <label class="form-check-label" for="seqG">Terpisah per kombinasi (mis. per maker: BANDO-0001, ABB-0001)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input cfg" type="radio" name="Code.SeqPerGroup" id="seqA" value="false" checked="@(!c.SeqPerGroup)" />
+                            <label class="form-check-label" for="seqA">Satu nomor urut untuk semua part (BANDO-0001, ABB-0002)</label>
+                        </div>
+                        <div class="form-text">Pola dengan {YYYY}/{MM} + per kombinasi = nomor mulai lagi dari 1 tiap tahun/bulan.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Isi {MAKER} / {MODEL} / {SUPP}</label>
+                        <div class="form-check"><input class="form-check-input cfg" asp-for="Code.Uppercase" /><label class="form-check-label" asp-for="Code.Uppercase">Huruf besar semua</label></div>
+                        <div class="form-check"><input class="form-check-input cfg" asp-for="Code.StripSymbols" /><label class="form-check-label" asp-for="Code.StripSymbols">Hapus spasi &amp; simbol (Sindo Seiki → SINDOSEIKI)</label></div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <label class="form-label mb-0 small" asp-for="Code.SegmentMaxLength">Maks. karakter</label>
+                            <input class="form-control form-control-sm cfg" asp-for="Code.SegmentMaxLength" type="number" min="0" max="40" style="width:80px" />
+                            <span class="small text-muted">0 = penuh</span>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label" asp-for="Code.SecondSuffix">Akhiran part 2nd used</label>
+                        <input class="form-control font-monospace cfg" asp-for="Code.SecondSuffix" maxlength="10" />
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" asp-for="RenameExisting" />
+                            <label class="form-check-label small" asp-for="RenameExisting">Bila diganti, ubah juga goods code @Model.SecondCount part 2nd yang sudah ada (akhiran sekarang <code>@Model.OldSuffix</code>). Label QR part tersebut perlu dicetak ulang.</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Goods code kosong</label>
+                        <div class="form-check">
+                            <input class="form-check-input" asp-for="Code.AutoGenerateWhenEmpty" />
+                            <label class="form-check-label" asp-for="Code.AutoGenerateWhenEmpty">Buat otomatis saat simpan part baru / import Excel bila goods code dikosongkan</label>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="border rounded p-2 bg-light">
+                            <div class="small fw-semibold mb-1">Pratinjau (memakai data part yang ada@(SiteCtx.MultiSiteSystem ? " di site " + (SiteCtx.Current ?? SiteCtx.Allowed.FirstOrDefault())?.Code : ""), pengaturan di atas belum disimpan)</div>
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                <input class="form-control form-control-sm pv" id="pvMaker" value="Bando" placeholder="Maker" style="max-width:150px" />
+                                <input class="form-control form-control-sm pv" id="pvModel" value="Injection" placeholder="Model" style="max-width:150px" />
+                                <input class="form-control form-control-sm pv" id="pvSupp" value="PT Sindo Seiki Aditama" placeholder="Supplier" style="max-width:220px" />
+                                <span>→</span>
+                                <code class="fs-6" id="pvCode">…</code>
+                                <span class="small text-muted" id="pvSecond"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer d-flex gap-2 align-items-center">
+                <button class="btn btn-primary" type="submit">Simpan Pengaturan</button>
+                <span class="small text-muted">Goods code yang sudah ada tidak berubah (kecuali akhiran 2nd bila dicentang).</span>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-body small">
+                <b>Contoh pola</b>
+                <table class="table table-sm mb-0 mt-1">
+                    <tr><td><code>{PREFIX}-{MAKER}-{SEQ}</code></td><td>MaPC-BANDO-0001</td><td class="text-muted">per maker (seperti Excel MASTER STOCK)</td></tr>
+                    <tr><td><code>SP-{MODEL}-{SEQ}</code></td><td>SP-INJECTION-0001</td><td class="text-muted">per model / area mesin</td></tr>
+                    <tr><td><code>{PREFIX}{YY}{MM}{SEQ}</code></td><td>PT26110001</td><td class="text-muted">per bulan registrasi</td></tr>
+                    <tr><td><code>{PREFIX}-{SEQ}</code></td><td>SPR-000123</td><td class="text-muted">nomor urut saja</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</form>
+@section Scripts {
+<script>
+(function () {
+    const form = document.getElementById('setForm'), pat = document.getElementById('Code_Pattern');
+    document.querySelectorAll('.tok').forEach(b => b.addEventListener('click', () => {
+        const s = pat.selectionStart ?? pat.value.length, e = pat.selectionEnd ?? s;
+        pat.value = pat.value.slice(0, s) + b.textContent + pat.value.slice(e);
+        pat.focus(); pat.selectionStart = pat.selectionEnd = s + b.textContent.length;
+        preview();
+    }));
+    let t;
+    async function run() {
+        const fd = new FormData(form);
+        fd.append('maker', document.getElementById('pvMaker').value);
+        fd.append('model', document.getElementById('pvModel').value);
+        fd.append('supp', document.getElementById('pvSupp').value);
+        const r = await fetch('?handler=Preview', { method: 'POST', body: fd });
+        const j = await r.json().catch(() => ({ error: 'Gagal memuat pratinjau' }));
+        document.getElementById('pvCode').textContent = j.code || '—';
+        document.getElementById('pvSecond').innerHTML = j.code ? '2nd: <code>' + SP.esc(j.second) + '</code>'
+            : '<span class="text-danger">' + SP.esc(j.error) + '</span>';
+    }
+    function preview() { clearTimeout(t); t = setTimeout(run, 250); }
+    form.addEventListener('input', preview);
+    form.addEventListener('change', preview);
+    document.querySelectorAll('.pv').forEach(i => i.addEventListener('input', preview));
+    run();
+})();
+</script>
+}

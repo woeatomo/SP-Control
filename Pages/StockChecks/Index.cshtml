@@ -1,0 +1,65 @@
+@page
+@model SparePartControl.Pages.StockChecks.IndexModel
+@{ ViewData["Title"] = "Stock Checking"; }
+<h1 class="page-title mb-3">Stock Checking (per 6 bulan) <partial name="_SiteTitle" /></h1>
+<div class="row g-3">
+    @if (User.IsInRole("Admin") && SiteCtx.IsAll)
+    {
+        <div class="col-lg-4"><div class="alert alert-info">Pilih satu site di menu atas untuk memulai stock checking. Setiap site punya record stock checking sendiri.</div></div>
+    }
+    else if (User.IsInRole("Admin"))
+    {
+    <div class="col-lg-4">
+        <form method="post" asp-page-handler="Create" class="card">
+            <div class="card-header bg-white fw-semibold">Mulai Sesi Baru</div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-6"><label class="form-label">Tahun</label><input type="number" name="year" value="@Model.CurYear" class="form-control" required /></div>
+                    <div class="col-6">
+                        <label class="form-label">Semester</label>
+                        <select name="semester" class="form-select">
+                            <option value="1" selected="@(Model.CurSemester == 1)">S1 (Jan–Jun)</option>
+                            <option value="2" selected="@(Model.CurSemester == 2)">S2 (Jul–Des)</option>
+                        </select>
+                    </div>
+                    <div class="col-12"><label class="form-label">Petugas / PIC</label><input name="checkedBy" class="form-control" required maxlength="100" /></div>
+                    <div class="col-12"><label class="form-label">Catatan</label><input name="notes" class="form-control" maxlength="300" /></div>
+                </div>
+                <div class="form-text mt-2">Sistem membuat daftar hitung dari seluruh part aktif dan part non-aktif yang masih punya stok.</div>
+            </div>
+            <div class="card-footer"><button class="btn btn-primary" type="submit">Mulai Stock Checking</button></div>
+        </form>
+    </div>
+    }
+    <div class="@(User.IsInRole("Admin") ? "col-lg-8" : "col-12")">
+        <div class="card">
+            <div class="card-header bg-white fw-semibold">Record Stock Checking</div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead><tr>@if (SiteCtx.IsAll) { <th>Site</th> }<th>Periode</th><th>Petugas</th><th>Mulai</th><th>Ditutup</th><th class="num">Progress</th><th class="num">Item Selisih</th><th class="num">Selisih USD</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in Model.Rows)
+                        {
+                            <tr>
+                                @if (SiteCtx.IsAll) { <td><span class="site-tag">@SiteCtx.CodeOf(r.S.SiteId)</span></td> }
+                                <td><b>@r.S.Period</b><div class="small text-muted">@r.S.PeriodLabel</div></td>
+                                <td>@r.S.CheckedBy</td>
+                                <td class="nowrap">@r.S.StartedAt.ToString("dd MMM yyyy")</td>
+                                <td class="nowrap">@(r.S.ClosedAt?.ToString("dd MMM yyyy") ?? "-")</td>
+                                <td class="num">@r.Counted / @r.Total</td>
+                                <td class="num">@r.Variance</td>
+                                <td class="num @(r.VarianceUsd < 0 ? "text-danger" : "")">@r.VarianceUsd.ToString("#,0.00")</td>
+                                <td>
+                                    @if (r.S.Status == StockCheckStatus.Open) { <span class="badge badge-min">Berjalan</span> }
+                                    else { <span class="badge badge-ok">Selesai</span> }
+                                </td>
+                                <td><a class="btn btn-sm btn-outline-primary py-0" asp-page="Details" asp-route-id="@r.S.Id">@(r.S.Status == StockCheckStatus.Open && User.IsInRole("Admin") ? "Lanjut hitung" : "Lihat")</a></td>
+                            </tr>
+                        }
+                        @if (Model.Rows.Count == 0) { <tr><td colspan="10" class="text-center text-muted py-4">Belum ada record stock checking.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

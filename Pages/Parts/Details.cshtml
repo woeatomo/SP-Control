@@ -1,0 +1,138 @@
+@page "{id:int}"
+@model SparePartControl.Pages.Parts.DetailsModel
+@{
+    var p = Model.Part;
+    ViewData["Title"] = p.PartNumber;
+    var isAdmin = User.IsInRole("Admin");
+}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="page-title me-auto">@p.PartNumber <span class="text-muted fw-normal">· @p.Name</span>
+        @if (SiteCtx.MultiSiteSystem) { <span class="site-tag align-middle">@SiteCtx.CodeOf(p.SiteId)</span> }</h1>
+    @if (isAdmin)
+    {
+        <a class="btn btn-primary btn-sm" href="/Entry/issue?partId=@p.Id">Issue</a>
+        <a class="btn btn-outline-primary btn-sm" href="/Entry/in?partId=@p.Id">Input</a>
+        <a class="btn btn-outline-primary btn-sm" href="/Entry/loan?partId=@p.Id">Loan</a>
+        <a class="btn btn-outline-secondary btn-sm" asp-page="Edit" asp-route-id="@p.Id">Edit</a>
+        @if (!p.HasSecondSuffix && Model.Counterpart == null)
+        {
+            <a class="btn btn-outline-secondary btn-sm" href="/Parts/Edit?from=@p.Id" title="Buat goods code @(p.PartNumber + Part.SecondSuffix)">+ Part 2nd</a>
+        }
+    }
+    <a class="btn btn-outline-secondary btn-sm" href="/Parts/Labels?ids=@p.Id" target="_blank">Label QR</a>
+    @if (isAdmin)
+    {
+        <form method="post" asp-page-handler="Delete" asp-route-id="@p.Id" onsubmit="return confirm('Hapus part ini?')">
+            <button class="btn btn-outline-danger btn-sm" type="submit">Hapus</button>
+        </form>
+    }
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-3">
+        <div class="card h-100">
+            <div class="card-body d-flex align-items-center justify-content-center">
+                <div class="part-img w-100">
+                    @if (p.HasImage) { <a href="@p.ImageUrl" target="_blank" title="Buka gambar ukuran penuh"><img src="@p.ImageUrl" alt="Gambar @p.PartNumber" /></a> }
+                    else
+                    {
+                        <div class="text-center text-muted small">Belum ada gambar
+                            @if (isAdmin) { <div><a asp-page="Edit" asp-route-id="@p.Id">Upload gambar</a></div> }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <dl class="row mb-0">
+                            <dt class="col-5 text-muted fw-normal">Spesifikasi</dt><dd class="col-7">@(p.Specification ?? "-")</dd>
+                            <dt class="col-5 text-muted fw-normal">Model</dt><dd class="col-7">@(p.Category ?? "-")</dd>
+                            <dt class="col-5 text-muted fw-normal">Maker</dt><dd class="col-7">@(p.Brand ?? "-")</dd>
+                            <dt class="col-5 text-muted fw-normal">Supplier</dt><dd class="col-7">@(p.Supplier ?? "-")</dd>
+                            <dt class="col-5 text-muted fw-normal">Mesin / Line</dt><dd class="col-7">@(p.Machine ?? "-")</dd>
+                            <dt class="col-5 text-muted fw-normal">Lokasi Rak</dt>
+                            <dd class="col-7">
+                                <span class="loc-chip" id="locChip">📍 @(string.IsNullOrWhiteSpace(p.Location) ? "belum diisi" : p.Location)</span>
+                                @if (isAdmin) { <button type="button" class="btn btn-sm btn-outline-primary py-0 ms-1" id="btnLocate">Location</button> }
+                                <div class="small text-muted" id="locMsg"></div>
+                            </dd>
+                            <dt class="col-5 text-muted fw-normal">Remark</dt><dd class="col-7">@(p.Remarks ?? "-")</dd>
+                        </dl>
+                    </div>
+                    <div class="col-sm-6">
+                        <dl class="row mb-0">
+                            <dt class="col-5 text-muted fw-normal">Harga</dt><dd class="col-7">@p.Currency @p.UnitPrice.ToString("#,0.##")</dd>
+                            <dt class="col-5 text-muted fw-normal">Harga USD</dt><dd class="col-7">@p.UnitPriceUsd.ToString("#,0.00##")</dd>
+                            <dt class="col-5 text-muted fw-normal">Nilai Stok</dt><dd class="col-7"><b>USD @p.TotalValueUsd.ToString("#,0.00")</b></dd>
+                            <dt class="col-5 text-muted fw-normal">Stock Category</dt><dd class="col-7">@(p.Status == PartStatus.Active ? "ACTIVE" : "INACTIVE")</dd>
+                            <dt class="col-5 text-muted fw-normal">Kondisi</dt><dd class="col-7">@(p.Condition == PartCondition.Second ? "2nd used" : "Baru")</dd>
+                            @if (Model.Counterpart != null)
+                            {
+                                <dt class="col-5 text-muted fw-normal">@(p.HasSecondSuffix ? "Part original" : "Versi 2nd")</dt>
+                                <dd class="col-7"><a asp-page="Details" asp-route-id="@Model.Counterpart.Id">@Model.Counterpart.PartNumber</a> <span class="small text-muted">(stok @StockService.Fmt(Model.Counterpart.StockQty))</span></dd>
+                            }
+                            <dt class="col-5 text-muted fw-normal">Reusable</dt><dd class="col-7">@(p.IsReusable ? "♻ Ya" : "Tidak")</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3">
+        <div class="card h-100">
+            <div class="card-body d-flex flex-wrap gap-3 align-items-center">
+                <img src="/qr?c=@Uri.EscapeDataString(p.PartNumber)&s=5" alt="QR" style="width:120px;height:120px" />
+                <div>
+                    <div class="stat p-0">
+                        <div class="label">Stok saat ini</div>
+                        <div class="value">@StockService.Fmt(p.StockQty) <span class="fs-6 fw-normal text-muted">@p.Unit</span></div>
+                        <div class="sub">Min @StockService.Fmt(p.MinStock) · Max @StockService.Fmt(p.MaxStock) · Initial @StockService.Fmt(p.InitialStock)</div>
+                    </div>
+                    <div class="mt-1"><partial name="_LevelBadge" model="p.Level" />
+                        @if (p.NeedsRestock && p.SuggestedOrder > 0) { <span class="small text-muted">saran order @StockService.Fmt(p.SuggestedOrder)</span> }</div>
+                    @if (Model.OpenLoans.Count > 0)
+                    {
+                        <div class="small mt-1">Sedang dipinjam: <b>@StockService.Fmt(Model.OpenLoans.Sum(l => l.Outstanding))</b> @p.Unit</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header bg-white fw-semibold">Kartu Stok (50 terakhir)</div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead><tr><th>Tanggal</th><th>Tipe</th><th>No. Dokumen</th><th class="num">Qty</th><th class="num">Saldo</th><th>PIC</th><th>Mesin / Dept</th><th>Catatan</th></tr></thead>
+            <tbody>
+                @foreach (var t in Model.History)
+                {
+                    <tr>
+                        <td class="nowrap">@t.Date.ToString("dd MMM yyyy HH:mm")</td>
+                        <td><partial name="_TxBadge" model="t.Type" /></td>
+                        <td class="nowrap">@t.DocNo</td>
+                        <td class="num @(t.Qty < 0 ? "text-danger" : "text-success")">@(t.Qty > 0 ? "+" : "")@StockService.Fmt(t.Qty)</td>
+                        <td class="num">@StockService.Fmt(t.BalanceAfter)</td>
+                        <td>@t.Pic</td>
+                        <td>@t.Department</td>
+                        <td class="small">@t.Reference @t.Notes</td>
+                    </tr>
+                }
+                @if (Model.History.Count == 0) { <tr><td colspan="8" class="text-center text-muted py-3">Belum ada transaksi.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    document.getElementById('btnLocate')?.addEventListener('click', () =>
+        SP.locate(@p.Id, document.getElementById('locChip'), document.getElementById('locMsg')));
+</script>
+}

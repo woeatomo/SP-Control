@@ -1,0 +1,197 @@
+@page
+@model SparePartControl.Pages.Parts.IndexModel
+@{
+    ViewData["Title"] = "Master Data";
+    var f = Model.F;
+    var isAdmin = User.IsInRole("Admin");
+}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="page-title me-auto">Master Data Spare Part <partial name="_SiteTitle" /></h1>
+    @if (isAdmin)
+    {
+        <a class="btn btn-primary btn-sm" asp-page="Edit">+ Part Baru</a>
+        <a class="btn btn-outline-secondary btn-sm" asp-page="Import">Import Excel</a>
+    }
+    <a class="btn btn-outline-secondary btn-sm" href="@Model.Url(("handler", "ExportExcel"), ("page", null))">Export Excel</a>
+    <a class="btn btn-outline-secondary btn-sm" href="@Model.Url(("handler", "Export"), ("page", null))">CSV</a>
+    <button class="btn btn-outline-secondary btn-sm" type="submit" form="labelForm">Cetak Label QR</button>
+</div>
+
+<form method="get" id="filterForm">
+    <input type="hidden" name="sort" value="@f.Sort" />
+    <input type="hidden" name="dir" value="@f.Dir" />
+    <div class="card mb-3">
+        <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
+            <div class="input-group input-group-sm" style="max-width:420px">
+                <input class="form-control" name="q" id="q" value="@f.Q" placeholder="Cari di semua kolom, atau scan QR…" autofocus />
+                <button class="btn btn-outline-secondary" type="button" id="btnScan" title="Scan QR dengan kamera">📷 Scan</button>
+                <button class="btn btn-primary" type="submit">Cari</button>
+            </div>
+            <select class="form-select form-select-sm" name="fFlag" style="max-width:150px" onchange="this.form.submit()" title="Tanda part">
+                <option value="">Semua tanda</option>
+                <option value="reusable" selected="@(f.Flag == "reusable")">♻ Reusable</option>
+                <option value="second" selected="@(f.Flag == "second")">2nd used</option>
+                <option value="new" selected="@(f.Flag == "new")">Baru</option>
+            </select>
+            @if (f.AnyFilter)
+            {
+                <a class="btn btn-link btn-sm" asp-page="Index">Reset filter</a>
+            }
+            <div class="ms-auto small text-muted">
+                @Model.Total.ToString("N0") item · nilai stok <b>USD @Model.TotalValueUsd.ToString("N2")</b>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 master">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="chkAll" title="Pilih semua" /></th>
+                        @if (SiteCtx.IsAll) { <th>Site</th> }
+                        <th><a href="@Model.SortUrl("no")">goodsCode@(Model.SortMark("no"))</a></th>
+                        <th><a href="@Model.SortUrl("name")">goodsName@(Model.SortMark("name"))</a></th>
+                        <th><a href="@Model.SortUrl("cat")">Model@(Model.SortMark("cat"))</a></th>
+                        <th>stockCategory</th>
+                        <th><a href="@Model.SortUrl("loc")">rackName@(Model.SortMark("loc"))</a></th>
+                        <th><a href="@Model.SortUrl("brand")">makerName@(Model.SortMark("brand"))</a></th>
+                        <th><a href="@Model.SortUrl("sup")">suppName@(Model.SortMark("sup"))</a></th>
+                        <th>currency</th>
+                        <th class="num">unit_price</th>
+                        <th class="num"><a href="@Model.SortUrl("usd")">unit_USD@(Model.SortMark("usd"))</a></th>
+                        <th class="num"><a href="@Model.SortUrl("init")">initial@(Model.SortMark("init"))</a></th>
+                        <th class="num"><a href="@Model.SortUrl("min")">min@(Model.SortMark("min"))</a></th>
+                        <th class="num"><a href="@Model.SortUrl("max")">max@(Model.SortMark("max"))</a></th>
+                        <th class="num"><a href="@Model.SortUrl("stock")">nowStock@(Model.SortMark("stock"))</a></th>
+                        <th>Status</th>
+                        <th class="num"><a href="@Model.SortUrl("total")">StockValue@(Model.SortMark("total"))</a></th>
+                        <th>Remark</th>
+                        <th></th>
+                    </tr>
+                    <tr class="filter-row">
+                        <th></th>
+                        @if (SiteCtx.IsAll) { <th></th> }
+                        <th><input class="form-control" name="fNo" value="@f.PartNumber" placeholder="filter…" /></th>
+                        <th><input class="form-control" name="fName" value="@f.Name" placeholder="filter…" /></th>
+                        <th>
+                            <select class="form-select" name="fCat" onchange="this.form.submit()">
+                                <option value="">Semua</option>
+                                @foreach (var m in Model.Models) { <option value="@m" selected="@(string.Equals(f.Category, m, StringComparison.OrdinalIgnoreCase))">@m</option> }
+                            </select>
+                        </th>
+                        <th>
+                            <select class="form-select" name="fStatus" onchange="this.form.submit()">
+                                <option value="">Semua</option>
+                                <option value="Active" selected="@(f.Status == PartStatus.Active)">ACTIVE</option>
+                                <option value="NonActive" selected="@(f.Status == PartStatus.NonActive)">INACTIVE</option>
+                            </select>
+                        </th>
+                        <th><input class="form-control" name="fLoc" value="@f.Location" placeholder="filter…" /></th>
+                        <th><input class="form-control" name="fBrand" value="@f.Brand" placeholder="filter…" /></th>
+                        <th><input class="form-control" name="fSup" value="@f.Supplier" placeholder="filter…" /></th>
+                        <th>
+                            <select class="form-select" name="fCur" onchange="this.form.submit()">
+                                <option value="">Semua</option>
+                                @foreach (var c in Enum.GetValues<Currency>()) { <option value="@c" selected="@(f.Currency == c)">@c</option> }
+                            </select>
+                        </th>
+                        <th colspan="6"></th>
+                        <th>
+                            <select class="form-select" name="fStock" onchange="this.form.submit()">
+                                <option value="">Semua</option>
+                                <option value="alert" selected="@(f.Stock == "alert")">⚠ Perlu restock</option>
+                                <option value="empty" selected="@(f.Stock is "empty" or "out")">EMPTY</option>
+                                <option value="low" selected="@(f.Stock == "low")">LOW</option>
+                                <option value="critical" selected="@(f.Stock == "critical")">CRITICAL</option>
+                                <option value="normal" selected="@(f.Stock == "normal")">NORMAL</option>
+                                <option value="over" selected="@(f.Stock == "over")">OVERSTOCK</option>
+                            </select>
+                        </th>
+                        <th></th>
+                        <th><input class="form-control" name="fRem" value="@f.Remark" placeholder="filter…" /></th>
+                        <th><button class="btn btn-sm btn-outline-primary py-0" type="submit">Filter</button></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Model.Items)
+                    {
+                        <tr>
+                            <td><input type="checkbox" class="chk" name="ids" value="@p.Id" form="labelForm" /></td>
+                            @if (SiteCtx.IsAll) { <td><span class="site-tag">@SiteCtx.CodeOf(p.SiteId)</span></td> }
+                            <td class="nowrap">
+                                <a href="/Parts/Details/@p.Id" class="part-pop d-inline-flex align-items-center gap-2 fw-semibold" data-id="@p.Id" title="Lihat detail">
+                                    @if (p.HasImage) { <img class="thumb" src="@p.ImageUrl" alt="" loading="lazy" /> }
+                                    @p.PartNumber
+                                </a>
+                                @if (p.IsReusable) { <span class="badge badge-soft" title="Reusable — bisa dipakai lagi">♻</span> }
+                                @if (p.Condition == PartCondition.Second) { <span class="badge bg-secondary" title="2nd used">2nd</span> }
+                            </td>
+                            <td class="name-col">@p.Name @if (!string.IsNullOrWhiteSpace(p.Specification)) { <div class="small text-muted">@p.Specification</div> }</td>
+                            <td class="nowrap">@p.Category</td>
+                            <td>@if (p.Status == PartStatus.Active) { <span class="badge badge-ok">ACTIVE</span> } else { <span class="badge bg-light text-dark border">INACTIVE</span> }</td>
+                            <td class="nowrap">@if (!string.IsNullOrWhiteSpace(p.Location)) { <span class="loc-chip">📍 @p.Location</span> }</td>
+                            <td class="nowrap">@p.Brand</td>
+                            <td>@p.Supplier</td>
+                            <td>@p.Currency</td>
+                            <td class="num">@p.UnitPrice.ToString("#,0.##")</td>
+                            <td class="num">@p.UnitPriceUsd.ToString("#,0.00")</td>
+                            <td class="num">@StockService.Fmt(p.InitialStock)</td>
+                            <td class="num">@StockService.Fmt(p.MinStock)</td>
+                            <td class="num">@StockService.Fmt(p.MaxStock)</td>
+                            <td class="num"><b>@StockService.Fmt(p.StockQty)</b> <span class="small text-muted">@p.Unit</span></td>
+                            <td><partial name="_LevelBadge" model="p.Level" /></td>
+                            <td class="num">@p.TotalValueUsd.ToString("#,0.00")</td>
+                            <td class="small">@p.Remarks</td>
+                            <td class="nowrap">
+                                @if (isAdmin)
+                                {
+                                    <a class="btn btn-sm btn-outline-primary py-0" href="/Entry/issue?partId=@p.Id">Issue</a>
+                                    <a class="btn btn-sm btn-outline-secondary py-0" asp-page="Edit" asp-route-id="@p.Id" title="Edit part">✎</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr><td colspan="20" class="text-center text-muted py-4">Tidak ada data yang cocok.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <div class="card-footer d-flex align-items-center gap-2 py-2">
+                <span class="small text-muted me-auto">Halaman @Model.PageNo dari @Model.TotalPages</span>
+                <a class="btn btn-sm btn-outline-secondary @(Model.PageNo <= 1 ? "disabled" : "")" href="@Model.Url(("page", (Model.PageNo - 1).ToString()))">‹ Sebelumnya</a>
+                <a class="btn btn-sm btn-outline-secondary @(Model.PageNo >= Model.TotalPages ? "disabled" : "")" href="@Model.Url(("page", (Model.PageNo + 1).ToString()))">Berikutnya ›</a>
+            </div>
+        }
+    </div>
+</form>
+<form method="get" action="/Parts/Labels" id="labelForm" target="_blank">
+    @* Tanpa centang = cetak semua hasil filter *@
+    <input type="hidden" name="all" value="true" />
+    @foreach (var kv in Request.Query.Where(k => k.Key != "page" && k.Key != "handler"))
+    {
+        <input type="hidden" name="@kv.Key" value="@kv.Value" />
+    }
+</form>
+<partial name="_PartPopup" />
+<p class="small text-muted mt-2 d-print-none">Tips: klik part number untuk popup detail. centang beberapa part lalu klik <b>Cetak Label QR</b>; tanpa centang, semua hasil filter dicetak.</p>
+
+@section Scripts {
+<script>
+    document.getElementById('chkAll').addEventListener('change', e =>
+        document.querySelectorAll('.chk').forEach(c => c.checked = e.target.checked));
+    document.querySelectorAll('.part-pop').forEach(a => a.addEventListener('click', e => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return; // biarkan buka tab baru
+        e.preventDefault(); SP.showPart(a.dataset.id);
+    }));
+    document.getElementById('btnScan').addEventListener('click', () => SP.scan(async code => {
+        const p = await SP.lookup(code);
+        if (p) SP.showPart(p.id);
+        else { document.getElementById('q').value = code; document.getElementById('filterForm').submit(); }
+    }));
+</script>
+}

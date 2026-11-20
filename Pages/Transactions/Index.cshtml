@@ -1,0 +1,59 @@
+@page
+@model SparePartControl.Pages.Transactions.IndexModel
+@{ ViewData["Title"] = "Riwayat Transaksi"; }
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="page-title me-auto">Riwayat Transaksi <partial name="_SiteTitle" /></h1>
+    <a class="btn btn-outline-secondary btn-sm" href="@Model.Url(("handler", "Export"), ("page", null))">Export CSV</a>
+</div>
+<form method="get" class="card mb-3">
+    <div class="card-body py-2 row g-2 align-items-end">
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">Dari</label><input type="date" name="From" value="@Model.From?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">Sampai</label><input type="date" name="To" value="@Model.To?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small mb-0">Tipe</label>
+            <select name="Type" class="form-select form-select-sm">
+                <option value="">Semua</option>
+                <option value="Issue" selected="@(Model.Type == TxType.Issue)">Issued</option>
+                <option value="In" selected="@(Model.Type == TxType.In)">Input</option>
+                <option value="LoanOut" selected="@(Model.Type == TxType.LoanOut)">Loan</option>
+                <option value="LoanReturn" selected="@(Model.Type == TxType.LoanReturn)">Loan Kembali</option>
+                <option value="Adjustment" selected="@(Model.Type == TxType.Adjustment)">Adjustment</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">Part / No. dokumen</label><input name="Part" value="@Model.Part" class="form-control form-control-sm" /></div>
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">PIC / Mesin</label><input name="Pic" value="@Model.Pic" class="form-control form-control-sm" /></div>
+        <div class="col-6 col-md-2 d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Filter</button><a class="btn btn-link btn-sm" asp-page="Index">Reset</a></div>
+    </div>
+</form>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead><tr>@if (SiteCtx.IsAll) { <th>Site</th> }<th>Tanggal</th><th>Tipe</th><th>No. Dokumen</th><th>Part</th><th class="num">Qty</th><th class="num">Saldo</th><th class="num">Nilai USD</th><th>PIC</th><th>Mesin / Dept</th><th>Referensi / Catatan</th><th>Input oleh</th></tr></thead>
+            <tbody>
+                @foreach (var t in Model.Items)
+                {
+                    <tr>
+                        @if (SiteCtx.IsAll) { <td><span class="site-tag">@SiteCtx.CodeOf(t.SiteId)</span></td> }
+                        <td class="nowrap">@t.Date.ToString("dd MMM yyyy HH:mm")</td>
+                        <td><partial name="_TxBadge" model="t.Type" /></td>
+                        <td class="nowrap">@t.DocNo</td>
+                        <td><a asp-page="/Parts/Details" asp-route-id="@t.PartId">@t.Part.PartNumber</a><div class="small text-muted">@t.Part.Name</div></td>
+                        <td class="num @(t.Qty < 0 ? "text-danger" : "text-success")">@(t.Qty > 0 ? "+" : "")@StockService.Fmt(t.Qty) <span class="small text-muted">@t.Part.Unit</span></td>
+                        <td class="num">@StockService.Fmt(t.BalanceAfter)</td>
+                        <td class="num">@t.ValueUsd.ToString("#,0.00")</td>
+                        <td>@t.Pic</td>
+                        <td>@t.Department</td>
+                        <td class="small">@t.Reference @t.Notes</td>
+                        <td class="small text-muted">@t.CreatedBy</td>
+                    </tr>
+                }
+                @if (Model.Items.Count == 0) { <tr><td colspan="12" class="text-center text-muted py-4">Tidak ada transaksi.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer d-flex align-items-center gap-2 py-2">
+        <span class="small text-muted me-auto">@Model.Total.ToString("N0") transaksi · halaman @Model.PageNo / @Model.TotalPages</span>
+        <a class="btn btn-sm btn-outline-secondary @(Model.PageNo <= 1 ? "disabled" : "")" href="@Model.Url(("page", (Model.PageNo - 1).ToString()))">‹</a>
+        <a class="btn btn-sm btn-outline-secondary @(Model.PageNo >= Model.TotalPages ? "disabled" : "")" href="@Model.Url(("page", (Model.PageNo + 1).ToString()))">›</a>
+    </div>
+</div>

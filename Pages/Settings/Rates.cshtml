@@ -1,0 +1,41 @@
+@page
+@model SparePartControl.Pages.Settings.RatesModel
+@{
+    ViewData["Title"] = "Kurs";
+    decimal R(Currency c) => Model.Rates.FirstOrDefault(r => r.Currency == c)?.UnitsPerUsd ?? 1;
+    string U(Currency c) => Model.Rates.FirstOrDefault(r => r.Currency == c)?.UpdatedAt.ToString("dd MMM yyyy HH:mm") ?? "-";
+}
+<h1 class="page-title mb-3">Kurs Konversi ke USD</h1>
+<form method="post" class="card" style="max-width:560px">
+    <div class="card-body">
+        <p class="text-muted">Isi salah satu kolom: <b>1 USD = …</b> atau <b>Rate_to_USD</b> (pengali seperti di tblRate Excel: unit_USD = unit_price × Rate_to_USD). Saat disimpan, kolom <b>unit_USD</b> di seluruh master data dihitung ulang. Nilai transaksi yang sudah tercatat tidak berubah.</p>
+        <table class="table table-sm align-middle">
+            <thead><tr><th>currency</th><th>1 USD =</th><th>Rate_to_USD</th><th>Terakhir diubah</th></tr></thead>
+            <tbody>
+                <tr><td>USD</td><td><input class="form-control form-control-sm" value="1" readonly /></td><td><input class="form-control form-control-sm" value="1" readonly /></td><td></td></tr>
+                @foreach (var c in new[] { Currency.SGD, Currency.JPY, Currency.IDR })
+                {
+                    var key = c.ToString().ToLowerInvariant();
+                    <tr>
+                        <td>@c</td>
+                        <td><input type="number" step="any" min="0.0001" name="@key" id="u_@key" value="@R(c).ToString("0.######")" class="form-control form-control-sm upu" data-k="@key" required /></td>
+                        <td><input type="number" step="any" min="0" id="r_@key" value="@((1 / R(c)).ToString("0.############"))" class="form-control form-control-sm rtu" data-k="@key" /></td>
+                        <td class="small text-muted">@U(c)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer"><button class="btn btn-primary" type="submit">Simpan &amp; Hitung Ulang</button></div>
+</form>
+
+@section Scripts {
+<script>
+    // Dua kolom saling mengisi: Rate_to_USD = 1 / (1 USD = …).
+    const fmt = n => isFinite(n) && n > 0 ? String(+n.toPrecision(12)) : '';
+    document.querySelectorAll('.upu').forEach(i => i.addEventListener('input', () =>
+        document.getElementById('r_' + i.dataset.k).value = fmt(1 / parseFloat(i.value))));
+    document.querySelectorAll('.rtu').forEach(i => i.addEventListener('input', () =>
+        document.getElementById('u_' + i.dataset.k).value = fmt(1 / parseFloat(i.value))));
+</script>
+}

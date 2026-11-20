@@ -1,0 +1,9 @@
+@model TxType
+@switch (Model)
+{
+    case TxType.In: <span class="badge bg-success">Input</span> break;
+    case TxType.Issue: <span class="badge bg-primary">Issued</span> break;
+    case TxType.LoanOut: <span class="badge bg-warning text-dark">Loan</span> break;
+    case TxType.LoanReturn: <span class="badge bg-info text-dark">Loan Kembali</span> break;
+    default: <span class="badge bg-secondary">Adjustment</span> break;
+}

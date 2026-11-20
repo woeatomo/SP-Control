@@ -1,0 +1,5 @@
+@* Nama site aktif di judul halaman (hanya bila sistem punya lebih dari satu site). *@
+@if (SiteCtx.MultiSiteSystem)
+{
+    <span class="text-muted fw-normal fs-6">· @(SiteCtx.Current == null ? "Semua site" : SiteCtx.Current.Code + " — " + SiteCtx.Current.Name)</span>
+}

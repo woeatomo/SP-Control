@@ -1,0 +1,116 @@
+@page
+@model SparePartControl.Pages.Users.IndexModel
+@{ ViewData["Title"] = "User"; }
+<h1 class="page-title mb-3">Kelola User</h1>
+<div class="row g-3">
+    <div class="col-lg-4">
+        <form method="post" asp-page-handler="Create" class="card" autocomplete="off">
+            <div class="card-header bg-white fw-semibold">User Baru</div>
+            <div class="card-body">
+                <div class="mb-2"><label class="form-label">Username</label><input name="username" class="form-control" required minlength="3" maxlength="50" /></div>
+                <div class="mb-2"><label class="form-label">Nama lengkap</label><input name="fullName" class="form-control" maxlength="100" /></div>
+                <div class="mb-2">
+                    <label class="form-label">Role</label>
+                    <select name="role" class="form-select">
+                        <option value="Viewer">Viewer — hanya melihat &amp; export</option>
+                        <option value="Admin">Admin — transaksi &amp; ubah data di site-nya</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Akses site</label>
+                    <div class="form-check"><input class="form-check-input all-chk" type="checkbox" name="allSites" value="true" id="newAll" checked /><label class="form-check-label" for="newAll"><b>Semua site</b> <span class="small text-muted">(Admin + semua site = pengelola sistem)</span></label></div>
+                    <div class="site-list ms-3">
+                        @foreach (var s in Model.Sites)
+                        {
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sites" value="@s.Id" id="ns@(s.Id)" /><label class="form-check-label" for="ns@(s.Id)"><span class="font-monospace">@s.Code</span> — @s.Name</label></div>
+                        }
+                    </div>
+                </div>
+                <div class="mb-0"><label class="form-label">Password (min. 8 karakter)</label><input type="password" name="password" class="form-control" required minlength="8" autocomplete="new-password" /></div>
+            </div>
+            <div class="card-footer"><button class="btn btn-primary" type="submit">Tambah User</button></div>
+        </form>
+    </div>
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th>Akses Site</th><th>Status</th><th>Login terakhir</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var u in Model.Users)
+                        {
+                            var me = u.Id == Model.MyId;
+                            <tr>
+                                <td><b>@u.Username</b> @if (me) { <span class="badge badge-soft">Anda</span> }</td>
+                                <td>@u.FullName</td>
+                                <td>
+                                    <form method="post" asp-page-handler="Role" asp-route-id="@u.Id">
+                                        <select name="role" class="form-select form-select-sm" style="width:110px" onchange="this.form.submit()" disabled="@me">
+                                            <option value="Admin" selected="@(u.Role == UserRole.Admin)">Admin</option>
+                                            <option value="Viewer" selected="@(u.Role == UserRole.Viewer)">Viewer</option>
+                                        </select>
+                                    </form>
+                                </td>
+                                <td style="min-width:150px">
+                                    @{ var acc = Model.Access.TryGetValue(u.Id, out var a) ? a : new HashSet<int>(); }
+                                    <details>
+                                        <summary class="small">
+                                            @if (u.AllSites) { <b>Semua site</b> @if (u.Role == UserRole.Admin) { <span class="badge bg-primary">pengelola</span> } }
+                                            else if (acc.Count == 0) { <span class="text-danger">belum ada</span> }
+                                            else { <span class="font-monospace">@string.Join(", ", Model.Sites.Where(s => acc.Contains(s.Id)).Select(s => s.Code))</span> }
+                                        </summary>
+                                        @if (!me)
+                                        {
+                                            <form method="post" asp-page-handler="Access" asp-route-id="@u.Id" class="small mt-1">
+                                                <div class="form-check"><input class="form-check-input all-chk" type="checkbox" name="allSites" value="true" id="a@(u.Id)" checked="@u.AllSites" /><label class="form-check-label" for="a@(u.Id)">Semua site</label></div>
+                                                <div class="site-list ms-3">
+                                                    @foreach (var s in Model.Sites)
+                                                    {
+                                                        <div class="form-check"><input class="form-check-input" type="checkbox" name="sites" value="@s.Id" id="u@(u.Id)s@(s.Id)" checked="@acc.Contains(s.Id)" /><label class="form-check-label font-monospace" for="u@(u.Id)s@(s.Id)">@s.Code</label></div>
+                                                    }
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-primary py-0 mt-1" type="submit">Simpan akses</button>
+                                            </form>
+                                        }
+                                        else { <div class="small text-muted">akun sendiri</div> }
+                                    </details>
+                                </td>
+                                <td>@if (u.IsActive) { <span class="badge badge-ok">Aktif</span> } else { <span class="badge bg-secondary">Nonaktif</span> }</td>
+                                <td class="nowrap small">@(u.LastLoginAt?.ToString("dd MMM yyyy HH:mm") ?? "-")</td>
+                                <td class="nowrap">
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        <form method="post" asp-page-handler="Reset" asp-route-id="@u.Id" class="d-flex gap-1" autocomplete="off">
+                                            <input type="password" name="password" class="form-control form-control-sm" style="width:140px" placeholder="password baru" minlength="8" required autocomplete="new-password" />
+                                            <button class="btn btn-sm btn-outline-secondary" type="submit">Reset</button>
+                                        </form>
+                                        @if (!me)
+                                        {
+                                            <form method="post" asp-page-handler="Toggle" asp-route-id="@u.Id">
+                                                <button class="btn btn-sm @(u.IsActive ? "btn-outline-danger" : "btn-outline-success")" type="submit">@(u.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p class="small text-muted mt-2">
+            <b>Admin + Semua site</b> = pengelola sistem (site, user, kurs, format kode). <b>Admin</b> dengan site tertentu = admin section: transaksi dan master data hanya di site-nya.
+            <b>Viewer</b> hanya melihat site yang diberikan. User yang dinonaktifkan atau diubah role / akses semua site-nya langsung keluar dari sesi.
+        </p>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // "Semua site" dicentang → daftar site tidak dipakai.
+    document.querySelectorAll('.all-chk').forEach(c => {
+        const list = c.closest('form, .mb-2').querySelector('.site-list');
+        const sync = () => list.querySelectorAll('input').forEach(i => i.disabled = c.checked);
+        c.addEventListener('change', sync); sync();
+    });
+</script>
+}

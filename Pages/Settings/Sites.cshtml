@@ -1,0 +1,76 @@
+@page
+@model SparePartControl.Pages.Settings.SitesModel
+@inject SparePartControl.Services.AppSettingsService AppSettings
+@{ ViewData["Title"] = "Site / Section"; var editing = Model.Input.Id != 0; }
+<h1 class="page-title mb-3">Site / Section</h1>
+@if (Model.Errors.Count > 0)
+{
+    <div class="alert alert-danger py-2"><ul class="mb-0">@foreach (var e in Model.Errors) { <li>@e</li> }</ul></div>
+}
+<div class="row g-3">
+    <div class="col-lg-4">
+        <form method="post" asp-page-handler="Save" class="card">
+            <div class="card-header bg-white fw-semibold">@(editing ? "Edit Site " + Model.Input.Code : "Site Baru")</div>
+            <div class="card-body">
+                <input type="hidden" asp-for="Input.Id" />
+                <div class="mb-2">
+                    <label class="form-label" asp-for="Input.Code"></label>
+                    <input class="form-control font-monospace text-uppercase" asp-for="Input.Code" maxlength="10" placeholder="mis. PC1, MOLD, WH-A" required />
+                    <div class="form-text">Singkat, tanpa spasi. Dipakai di nomor dokumen (ISS-<b>PC1</b>-261120-001) dan token <code>{SITE}</code> di goods code.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label" asp-for="Input.Name"></label>
+                    <input class="form-control" asp-for="Input.Name" maxlength="100" placeholder="mis. Plant 1 – Maintenance Injection" required />
+                </div>
+                <div class="mb-0">
+                    <label class="form-label" asp-for="Input.CodePrefix"></label>
+                    <input class="form-control font-monospace" asp-for="Input.CodePrefix" maxlength="20" placeholder="kosong = @AppSettings.Code.Prefix" />
+                    <div class="form-text">Isi <code>{PREFIX}</code> khusus site ini. Kosongkan untuk memakai prefix umum di <a asp-page="General">Format Kode</a>.</div>
+                </div>
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <button class="btn btn-primary" type="submit">@(editing ? "Simpan" : "Tambah Site")</button>
+                @if (editing) { <a class="btn btn-outline-secondary" asp-page="Sites">Batal</a> }
+            </div>
+        </form>
+    </div>
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle">
+                    <thead><tr><th>Kode</th><th>Nama</th><th>Prefix</th><th class="num">Part</th><th class="num">Stock Value (USD)</th><th class="num">User</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in Model.Rows)
+                        {
+                            <tr class="@(r.Site.IsActive ? "" : "text-muted")">
+                                <td class="font-monospace fw-semibold">@r.Site.Code</td>
+                                <td>@r.Site.Name</td>
+                                <td class="font-monospace small">@(r.Site.CodePrefix ?? "—")</td>
+                                <td class="num">@r.Parts.ToString("N0")</td>
+                                <td class="num">@r.Value.ToString("N2")</td>
+                                <td class="num" title="Termasuk user dengan akses semua site">@r.Users</td>
+                                <td>@if (r.Site.IsActive) { <span class="badge badge-ok">Aktif</span> } else { <span class="badge bg-secondary">Nonaktif</span> }</td>
+                                <td class="nowrap text-end">
+                                    <a class="btn btn-sm btn-outline-secondary py-0" href="?edit=@r.Site.Id">Edit</a>
+                                    <form method="post" asp-page-handler="Toggle" asp-route-id="@r.Site.Id" class="d-inline">
+                                        <button class="btn btn-sm py-0 @(r.Site.IsActive ? "btn-outline-warning" : "btn-outline-success")" type="submit">@(r.Site.IsActive ? "Nonaktifkan" : "Aktifkan")</button>
+                                    </form>
+                                    @if (r.Parts == 0)
+                                    {
+                                        <form method="post" asp-page-handler="Delete" asp-route-id="@r.Site.Id" class="d-inline" onsubmit="return confirm('Hapus site @r.Site.Code?')">
+                                            <button class="btn btn-sm btn-outline-danger py-0" type="submit">Hapus</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="small text-muted mt-2">
+            Setiap site punya master part, stok, transaksi, loan dan stock checking sendiri; goods code boleh sama di site berbeda.
+            Kurs, format kode dan user berlaku untuk semua site. Akses user ke site diatur di menu <a asp-page="/Users/Index">User</a>.
+        </div>
+    </div>
+</div>

@@ -1,0 +1,24 @@
+@page
+@model SparePartControl.Pages.Account.SelectSiteModel
+@{ ViewData["Title"] = "Pilih Site"; }
+<div class="card mx-auto mt-3" style="max-width:560px">
+    <div class="card-body">
+        <h1 class="h5">Pilih site / section</h1>
+        @if (Model.SiteCtx.Allowed.Count == 0)
+        {
+            <p class="text-danger mb-0">Akun Anda belum diberi akses ke site mana pun. Hubungi admin.</p>
+        }
+        else
+        {
+            <p class="text-muted small">Halaman ini mengubah data, jadi harus memilih satu site (bukan "Semua site").</p>
+            <div class="list-group">
+                @foreach (var s in Model.SiteCtx.Allowed)
+                {
+                    <a class="list-group-item list-group-item-action" href="/site/switch?id=@s.Id&returnUrl=@Uri.EscapeDataString(Model.ReturnUrl)">
+                        <span class="font-monospace fw-semibold">@s.Code</span> — @s.Name
+                    </a>
+                }
+            </div>
+        }
+    </div>
+</div>

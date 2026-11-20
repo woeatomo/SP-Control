@@ -1,0 +1,237 @@
+@page "{id:int?}"
+@model SparePartControl.Pages.Parts.EditModel
+@{ ViewData["Title"] = Model.IsNew ? "Part Baru" : "Edit Part"; }
+<h1 class="page-title mb-3">@ViewData["Title"] <partial name="_SiteTitle" /></h1>
+<form method="post" enctype="multipart/form-data" class="card" style="max-width:980px">
+    <div class="card-body">
+        @if (Model.CopiedFrom != null)
+        {
+            <div class="alert alert-info py-2">Membuat part <b>2nd used</b> dari <b>@Model.CopiedFrom</b>. Sesuaikan harga dan lokasi bila berbeda dari part baru.</div>
+        }
+        <input type="hidden" asp-for="Part.Id" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label asp-for="Part.PartNumber" class="form-label"></label>
+                <div class="input-group">
+                    @if (Model.IsNew && Model.Code.AutoGenerateWhenEmpty)
+                    {
+                        <input asp-for="Part.PartNumber" class="form-control" autofocus data-val="false" placeholder="kosongkan = otomatis" />
+                    }
+                    else
+                    {
+                        <input asp-for="Part.PartNumber" class="form-control" autofocus />
+                    }
+                    @if (Model.IsNew) { <button class="btn btn-outline-secondary" type="button" id="btnGen" title="Buat kode otomatis dari Maker">Generate</button> }
+                </div>
+                <span asp-validation-for="Part.PartNumber" class="text-danger small"></span>
+                <div class="form-text">Isi QR code. Format: <b>@Model.Code.Pattern</b> (mis. <b>@Model.CodeExample</b>) — isi @string.Join(" / ", new[] { Model.Code.Pattern.Contains("{MAKER}") ? "Maker" : null, Model.Code.Pattern.Contains("{MODEL}") ? "Model" : null, Model.Code.Pattern.Contains("{SUPP}") ? "Supplier" : null }.Where(x => x != null)) lalu klik Generate@(Model.Code.AutoGenerateWhenEmpty ? ", atau kosongkan untuk dibuat otomatis saat simpan" : ""). Part 2nd used = kode original + <b>@Part.SecondSuffix</b>.
+                    @if (User.IsInRole("Admin")) { <a href="/Settings/General">Ubah format</a> }</div>
+            </div>
+            <div class="col-md-8">
+                <label asp-for="Part.Name" class="form-label"></label>
+                <input asp-for="Part.Name" class="form-control" />
+                <span asp-validation-for="Part.Name" class="text-danger small"></span>
+            </div>
+            <div class="col-md-12">
+                <label asp-for="Part.Specification" class="form-label"></label>
+                <input asp-for="Part.Specification" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Part.Category" class="form-label"></label>
+                <input asp-for="Part.Category" class="form-control" list="catList" placeholder="ELECTRICAL, INJECTION, …" />
+                <datalist id="catList">@foreach (var c in Model.Categories) { <option value="@c"></option> }</datalist>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Part.Brand" class="form-label"></label>
+                <input asp-for="Part.Brand" class="form-control" list="makerList" />
+                <datalist id="makerList">@foreach (var c in Model.Makers) { <option value="@c"></option> }</datalist>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Part.Supplier" class="form-label"></label>
+                <input asp-for="Part.Supplier" class="form-control" list="supList" />
+                <datalist id="supList">@foreach (var c in Model.Suppliers) { <option value="@c"></option> }</datalist>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Part.Machine" class="form-label"></label>
+                <input asp-for="Part.Machine" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Part.Location" class="form-label"></label>
+                <input asp-for="Part.Location" class="form-control" placeholder="mis. Cabinet 4 / Drawer F atau Rack 1 / Box 03 / Layer 3" list="rackList" />
+                <datalist id="rackList">@foreach (var c in Model.Racks) { <option value="@c"></option> }</datalist>
+                <div class="form-text">Tempat part disimpan. Dipakai tombol 📍 Location untuk menunjukkan posisi rak.</div>
+            </div>
+
+            <div class="col-md-2">
+                <label asp-for="Part.Currency" class="form-label"></label>
+                <select asp-for="Part.Currency" class="form-select" asp-items="Html.GetEnumSelectList<Currency>()" id="cur"></select>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Part.UnitPrice" class="form-label"></label>
+                <input asp-for="Part.UnitPrice" type="number" step="any" min="0" class="form-control" id="price" />
+                <span asp-validation-for="Part.UnitPrice" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">unit_USD</label>
+                <input class="form-control" id="usd" readonly tabindex="-1" />
+                <div class="form-text" id="rateInfo"></div>
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Part.Unit" class="form-label"></label>
+                <input asp-for="Part.Unit" class="form-control" list="unitList" />
+                <datalist id="unitList">@foreach (var u in Model.Units) { <option value="@u"></option> }</datalist>
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Part.MinStock" class="form-label"></label>
+                <input asp-for="Part.MinStock" type="number" step="any" min="0" class="form-control lvl" />
+                <span asp-validation-for="Part.MinStock" class="text-danger small"></span>
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Part.MaxStock" class="form-label"></label>
+                <input asp-for="Part.MaxStock" type="number" step="any" min="0" class="form-control lvl" />
+                <span asp-validation-for="Part.MaxStock" class="text-danger small"></span>
+            </div>
+            <div class="col-md-8 d-flex align-items-end">
+                <div class="form-text mb-2">Status stok: <span id="lvlPrev"></span> — EMPTY = 0, LOW = di bawah min, CRITICAL = sama dengan min, OVERSTOCK = di atas max. Max 0 = tanpa batas atas.</div>
+            </div>
+
+            @if (Model.IsNew)
+            {
+                <div class="col-md-3">
+                    <label asp-for="InitialStock" class="form-label">initialStock</label>
+                    <input asp-for="InitialStock" type="number" step="any" min="0" class="form-control lvl" id="nowQty" />
+                    <div class="form-text">Menjadi nowStock awal, dicatat sebagai transaksi “Saldo awal”.</div>
+                </div>
+            }
+            else
+            {
+                <div class="col-md-3">
+                    <label class="form-label">nowStock</label>
+                    <input class="form-control" id="nowQty" value="@Model.Part.StockQty.ToString("0.##")" readonly tabindex="-1" />
+                    <div class="form-text">initialStock: @StockService.Fmt(Model.Part.InitialStock). Stok hanya berubah lewat transaksi / stock checking.</div>
+                </div>
+            }
+            <div class="col-md-3">
+                <label asp-for="Part.Status" class="form-label"></label>
+                <select asp-for="Part.Status" class="form-select">
+                    <option value="Active">ACTIVE</option>
+                    <option value="NonActive">INACTIVE</option>
+                </select>
+                <div class="form-text">INACTIVE = dead stock / obsolete; nilainya dipisah di laporan aset.</div>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Part.Condition" class="form-label"></label>
+                <select asp-for="Part.Condition" class="form-select" id="cond">
+                    <option value="New">Baru</option>
+                    <option value="Second">2nd (bekas, layak pakai)</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-center">
+                <div class="form-check mt-3">
+                    <input asp-for="Part.IsReusable" class="form-check-input" />
+                    <label asp-for="Part.IsReusable" class="form-check-label">♻ Reusable (bisa dipakai lagi)</label>
+                </div>
+            </div>
+            <div class="col-md-12">
+                <label class="form-label" for="Image">Gambar Spare Part <span class="text-muted fw-normal">(tidak wajib, tapi disarankan)</span></label>
+                <div class="d-flex flex-wrap gap-3 align-items-start">
+                    <div class="part-img part-img-form" id="imgBox">
+                        @if (Model.Part.HasImage) { <img src="@Model.Part.ImageUrl" alt="Gambar part" id="imgPrev" /> }
+                        else { <span class="text-muted small" id="imgEmpty">Belum ada gambar</span> }
+                    </div>
+                    <div style="max-width:440px">
+                        <input type="file" asp-for="Image" accept="image/jpeg,image/png,image/webp" class="form-control" />
+                        <span asp-validation-for="Image" class="text-danger small"></span>
+                        <div class="form-text">JPG / PNG / WebP. Dari HP bisa langsung foto. Gambar besar dikecilkan otomatis sebelum diupload. Gambar tampil di popup detail supaya part mudah dikenali saat diambil.</div>
+                        @if (Model.Part.HasImage)
+                        {
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" asp-for="RemoveImage" />
+                                <label class="form-check-label" asp-for="RemoveImage">Hapus gambar yang ada</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-12">
+                <label asp-for="Part.Remarks" class="form-label"></label>
+                <textarea asp-for="Part.Remarks" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Simpan</button>
+        <a class="btn btn-outline-secondary" href="@(Model.IsNew ? "/Parts" : "/Parts/Details/" + Model.Part.Id)">Batal</a>
+    </div>
+</form>
+@section Scripts {
+<partial name="_ValidationScriptsPartial" />
+<script>
+    const rates = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Rates.ToDictionary(k => k.Key.ToString(), v => v.Value)));
+    const curNames = ['USD', 'SGD', 'JPY', 'IDR'];
+    function calc() {
+        const sel = document.getElementById('cur');
+        const cur = curNames[sel.value] ?? sel.options[sel.selectedIndex].text;
+        const price = parseFloat(document.getElementById('price').value) || 0;
+        const r = rates[cur] || 1;
+        document.getElementById('usd').value = (price / r).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+        document.getElementById('rateInfo').textContent = cur === 'USD' ? '' : 'Kurs: 1 USD = ' + r.toLocaleString('en-US') + ' ' + cur;
+    }
+    // Generate goods code dari Maker.
+    document.getElementById('btnGen')?.addEventListener('click', async () => {
+        const v = id => encodeURIComponent(document.getElementById(id).value.trim());
+        const r = await fetch(`/api/parts/nextcode?maker=${v('Part_Brand')}&model=${v('Part_Category')}&supp=${v('Part_Supplier')}`);
+        const j = await r.json();
+        if (!r.ok) { alert(j.error || 'Gagal membuat kode'); return; }
+        pn.value = j.code + (cond.value === 'Second' ? SFX : '');
+    });
+
+    // Preview status stok (aturan sama dengan kolom Status di Excel).
+    function lvl() {
+        const n = parseFloat(document.getElementById('nowQty').value) || 0,
+            mi = parseFloat(document.getElementById('Part_MinStock').value) || 0,
+            ma = parseFloat(document.getElementById('Part_MaxStock').value) || 0;
+        const [t, c] = n <= 0 ? ['EMPTY', 'lv-empty'] : n < mi ? ['LOW', 'lv-low'] : n === mi ? ['CRITICAL', 'lv-critical']
+            : ma > 0 && n > ma ? ['OVERSTOCK', 'lv-over'] : ['NORMAL', 'lv-normal'];
+        document.getElementById('lvlPrev').innerHTML = `<span class="badge lv ${c}">${t}</span>`;
+    }
+    document.querySelectorAll('.lvl').forEach(i => i.addEventListener('input', lvl));
+    lvl();
+
+    // Gambar: preview + kecilkan foto besar (maks. 1280 px) di browser sebelum upload.
+    const fileInp = document.getElementById('Image'), imgBox = document.getElementById('imgBox');
+    fileInp.addEventListener('change', async () => {
+        const f = fileInp.files[0]; if (!f) return;
+        let blob = f;
+        try {
+            const bmp = await createImageBitmap(f);
+            const scale = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+            if (scale < 1 || f.size > 1024 * 1024) {
+                const c = document.createElement('canvas');
+                c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+                const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+                blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+                const dt = new DataTransfer();
+                dt.items.add(new File([blob], 'part.jpg', { type: 'image/jpeg' }));
+                fileInp.files = dt.files;
+            }
+        } catch (e) { /* bukan gambar yang bisa dibaca browser: biarkan server yang menolak */ }
+        imgBox.innerHTML = '<img alt="Preview">';
+        imgBox.firstChild.src = URL.createObjectURL(blob);
+    });
+
+    // Kondisi 2nd ↔ akhiran -2ND pada part number (server tetap memvalidasi ulang).
+    const pn = document.getElementById('Part_PartNumber'), cond = document.getElementById('cond'), SFX = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Part.SecondSuffix.ToUpperInvariant()));
+    const has2nd = () => pn.value.trim().toUpperCase().endsWith(SFX);
+    cond.addEventListener('change', () => {
+        const v = pn.value.trim();
+        if (cond.value === 'Second' && v && !has2nd()) pn.value = v + SFX;
+        if (cond.value === 'New' && has2nd()) pn.value = v.slice(0, -SFX.length);
+    });
+    pn.addEventListener('change', () => { if (has2nd()) cond.value = 'Second'; });
+    document.getElementById('cur').addEventListener('change', calc);
+    document.getElementById('price').addEventListener('input', calc);
+    calc();
+</script>
+}

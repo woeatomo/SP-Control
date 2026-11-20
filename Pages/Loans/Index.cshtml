@@ -1,0 +1,101 @@
+@page
+@model SparePartControl.Pages.Loans.IndexModel
+@{ ViewData["Title"] = "Loan"; }
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="page-title me-auto">Loan (Peminjaman Part) <partial name="_SiteTitle" /></h1>
+    @if (User.IsInRole("Admin")) { <a class="btn btn-primary btn-sm" href="/Entry/loan">+ Loan Baru</a> }
+</div>
+<form method="get" class="card mb-3">
+    <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
+        <div class="btn-group btn-group-sm">
+            <a class="btn @(Model.Show != "all" ? "btn-secondary" : "btn-outline-secondary")" href="?Show=open">Belum kembali</a>
+            <a class="btn @(Model.Show == "all" ? "btn-secondary" : "btn-outline-secondary")" href="?Show=all">Semua</a>
+        </div>
+        <input type="hidden" name="Show" value="@Model.Show" />
+        <input name="Q" id="loanQ" value="@Model.Q" class="form-control form-control-sm" style="max-width:300px" placeholder="Cari peminjam / part / no. dokumen" />
+        <button class="btn btn-outline-secondary btn-sm" type="button" id="btnScan">📷 Scan</button>
+        <button class="btn btn-primary btn-sm" type="submit">Cari</button>
+    </div>
+</form>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead><tr>@if (SiteCtx.IsAll) { <th>Site</th> }<th>No. Dokumen</th><th>Tgl Pinjam</th><th>Part</th><th>Peminjam</th><th class="num">Qty</th><th class="num">Kembali</th><th class="num">Terpakai</th><th class="num">Sisa</th><th>Rencana Kembali</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var l in Model.Items)
+                {
+                    <tr class="@(l.IsOverdue ? "row-warn" : "")">
+                        @if (SiteCtx.IsAll) { <td><span class="site-tag">@SiteCtx.CodeOf(l.SiteId)</span></td> }
+                        <td class="nowrap">@l.DocNo</td>
+                        <td class="nowrap">@l.LoanDate.ToString("dd MMM yyyy")</td>
+                        <td><a asp-page="/Parts/Details" asp-route-id="@l.PartId">@l.Part.PartNumber</a><div class="small text-muted">@l.Part.Name</div></td>
+                        <td>@l.Borrower<div class="small text-muted">@l.Department</div></td>
+                        <td class="num">@StockService.Fmt(l.Qty)</td>
+                        <td class="num">@StockService.Fmt(l.ReturnedQty)</td>
+                        <td class="num">@StockService.Fmt(l.UsedQty)</td>
+                        <td class="num"><b>@StockService.Fmt(l.Outstanding)</b> <span class="small text-muted">@l.Part.Unit</span></td>
+                        <td class="nowrap">@(l.DueDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                        <td>
+                            @if (l.Status == LoanStatus.Closed) { <span class="badge badge-ok">Selesai</span> }
+                            else if (l.IsOverdue) { <span class="badge badge-out">Terlambat</span> }
+                            else { <span class="badge badge-min">Dipinjam</span> }
+                        </td>
+                        <td>
+                            @if (l.Status == LoanStatus.Open && User.IsInRole("Admin"))
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0 btn-return"
+                                        data-id="@l.Id" data-doc="@l.DocNo" data-part="@l.Part.PartNumber — @l.Part.Name"
+                                        data-out="@l.Outstanding.ToString("0.##")" data-unit="@l.Part.Unit">Kembalikan</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Model.Items.Count == 0) { <tr><td colspan="12" class="text-center text-muted py-4">Tidak ada data loan.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="returnModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="post" asp-page-handler="Return" class="modal-content">
+            <input type="hidden" name="id" id="retId" />
+            <input type="hidden" name="Show" value="@Model.Show" />
+            <div class="modal-header py-2"><h6 class="modal-title">Pengembalian Loan <span id="retDoc"></span></h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <p class="mb-2"><b id="retPart"></b><br /><span class="text-muted">Sisa pinjaman: <span id="retOut"></span></span></p>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label">Qty dikembalikan ke stok</label>
+                        <input type="number" step="any" min="0" name="returnQty" id="retQty" class="form-control" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Qty terpakai (jadi Issued)</label>
+                        <input type="number" step="any" min="0" name="usedQty" value="0" class="form-control" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Catatan</label>
+                        <input name="notes" class="form-control" maxlength="300" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2"><button class="btn btn-primary" type="submit">Simpan</button></div>
+        </form>
+    </div>
+</div>
+@section Scripts {
+<script>
+    const rm = new bootstrap.Modal(document.getElementById('returnModal'));
+    document.querySelectorAll('.btn-return').forEach(b => b.addEventListener('click', () => {
+        document.getElementById('retId').value = b.dataset.id;
+        document.getElementById('retDoc').textContent = b.dataset.doc;
+        document.getElementById('retPart').textContent = b.dataset.part;
+        document.getElementById('retOut').textContent = b.dataset.out + ' ' + b.dataset.unit;
+        document.getElementById('retQty').value = b.dataset.out;
+        rm.show();
+    }));
+    document.getElementById('btnScan').addEventListener('click', () => SP.scan(code => {
+        document.getElementById('loanQ').value = code; document.getElementById('loanQ').form.submit();
+    }));
+</script>
+}

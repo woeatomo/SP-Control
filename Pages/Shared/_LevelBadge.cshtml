@@ -1,0 +1,9 @@
+@model StockLevel
+@switch (Model)
+{
+    case StockLevel.Empty: <span class="badge lv lv-empty" title="Stok habis (0)">EMPTY</span> break;
+    case StockLevel.Low: <span class="badge lv lv-low" title="Stok di bawah Min">LOW</span> break;
+    case StockLevel.Critical: <span class="badge lv lv-critical" title="Stok sama dengan Min">CRITICAL</span> break;
+    case StockLevel.Overstock: <span class="badge lv lv-over" title="Stok di atas Max">OVERSTOCK</span> break;
+    default: <span class="badge lv lv-normal">NORMAL</span> break;
+}
