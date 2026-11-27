@@ -8,7 +8,10 @@ public enum PartCondition { New, Second }
 public enum TxType { In, Issue, LoanOut, LoanReturn, Adjustment }
 public enum LoanStatus { Open, Closed }
 public enum StockCheckStatus { Open, Closed }
-public enum UserRole { Admin, Viewer }
+/// <summary>Requester = akun tablet peminta (hanya bisa membuat permintaan part).</summary>
+public enum UserRole { Admin, Viewer, Requester }
+public enum RequestStatus { New, Processing, Ready, Done, Rejected }
+public enum RequestUrgency { Normal, Urgent }
 
 /// <summary>
 /// Status stok, sama dengan kolom Status di Excel MASTER STOCK:
@@ -261,4 +264,41 @@ public class StockCheckItem
     [StringLength(300)] public string? Note { get; set; }
 
     public decimal? Variance => CountedQty.HasValue ? CountedQty.Value - SystemQty : null;
+}
+
+/// <summary>Permintaan part dari tablet di ruang produksi / maintenance.</summary>
+public class PartRequest
+{
+    public int Id { get; set; }
+    public int SiteId { get; set; }
+    [StringLength(30)] public string ReqNo { get; set; } = "";
+    [StringLength(100)] public string RequesterName { get; set; } = "";
+    /// <summary>Line / mesin / departemen peminta.</summary>
+    [StringLength(120)] public string? Line { get; set; }
+    public RequestUrgency Urgency { get; set; }
+    [StringLength(500)] public string? Notes { get; set; }
+    public RequestStatus Status { get; set; } = RequestStatus.New;
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    /// <summary>Akun tablet yang mengirim.</summary>
+    [StringLength(50)] public string? CreatedBy { get; set; }
+    [StringLength(50)] public string? HandledBy { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    /// <summary>Alasan ditolak / pesan untuk peminta.</summary>
+    [StringLength(300)] public string? ResponseNote { get; set; }
+    /// <summary>No. dokumen Issued yang memenuhi permintaan ini.</summary>
+    [StringLength(30)] public string? IssueDocNo { get; set; }
+    public List<PartRequestLine> Lines { get; set; } = new();
+}
+
+public class PartRequestLine
+{
+    public int Id { get; set; }
+    public int RequestId { get; set; }
+    public PartRequest Request { get; set; } = null!;
+    /// <summary>Part dari katalog; null bila peminta hanya menulis teks.</summary>
+    public int? PartId { get; set; }
+    public Part? Part { get; set; }
+    /// <summary>Teks yang ditulis peminta (untuk part yang tidak ditemukan di katalog).</summary>
+    [StringLength(200)] public string? FreeText { get; set; }
+    public decimal Qty { get; set; } = 1;
 }

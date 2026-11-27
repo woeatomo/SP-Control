@@ -66,4 +66,58 @@ public static class PartSearch
         }
         return score;
     }
+
+    /// <summary>Padanan istilah umum (Indonesia → Inggris) untuk permintaan yang ditulis bebas.</summary>
+    private static readonly Dictionary<string, string[]> Synonyms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["oli"] = new[] { "oil" }, ["pelumas"] = new[] { "oil", "lubricant", "grease" }, ["gemuk"] = new[] { "grease" },
+        ["hidrolik"] = new[] { "hydraulic" }, ["bantalan"] = new[] { "bearing" }, ["laher"] = new[] { "bearing" },
+        ["sabuk"] = new[] { "belt" }, ["vanbelt"] = new[] { "belt" }, ["fanbelt"] = new[] { "belt" },
+        ["selang"] = new[] { "hose" }, ["baut"] = new[] { "bolt" }, ["mur"] = new[] { "nut" }, ["ring"] = new[] { "washer", "ring" },
+        ["kabel"] = new[] { "cable", "wire" }, ["saklar"] = new[] { "switch" }, ["sakelar"] = new[] { "switch" },
+        ["pompa"] = new[] { "pump" }, ["katup"] = new[] { "valve" }, ["rantai"] = new[] { "chain" }, ["gir"] = new[] { "gear", "sprocket" },
+        ["gearbox"] = new[] { "gearbox", "reducer" }, ["silinder"] = new[] { "cylinder" }, ["saringan"] = new[] { "filter" },
+        ["sekring"] = new[] { "fuse" }, ["lampu"] = new[] { "lamp" }, ["kontaktor"] = new[] { "contactor" }, ["relai"] = new[] { "relay" },
+        ["termometer"] = new[] { "thermometer" }, ["pengukur"] = new[] { "gauge" }, ["tekanan"] = new[] { "pressure" },
+        ["nosel"] = new[] { "nozzle" }, ["pegas"] = new[] { "spring" }, ["per"] = new[] { "spring" }, ["sambungan"] = new[] { "fitting", "connector", "elbow" },
+        ["siku"] = new[] { "elbow" }, ["timer"] = new[] { "timer" }, ["motor"] = new[] { "motor" }, ["kipas"] = new[] { "fan" }
+    };
+
+    private static IEnumerable<string> Expand(string token)
+    {
+        yield return token;
+        if (Synonyms.TryGetValue(token, out var syn)) foreach (var s in syn) yield return s;
+    }
+
+    private static string Haystack(Part p) => string.Join(" ", p.PartNumber, p.Name, p.Specification, p.Brand, p.Category, p.Location, p.Machine, p.Remarks);
+
+    /// <summary>
+    /// Pencarian untuk teks bebas: coba cocok semua kata dulu; bila kosong, cari per kata (dan padanannya)
+    /// yang cocok di awal kata, urutkan menurut jumlah kata yang cocok. Kata pendek (&lt; 3 huruf) diabaikan di tahap ini.
+    /// </summary>
+    public static async Task<List<Part>> FuzzyAsync(IQueryable<Part> parts, string? text, int take)
+    {
+        var strict = await Apply(parts, text).Take(300).ToListAsync();
+        if (strict.Count > 0)
+            return strict.OrderByDescending(p => Score(p, text)).ThenByDescending(p => p.StockQty > 0).Take(take).ToList();
+
+        var groups = Tokens(text).Where(t => t.Length >= 3 && !t.All(char.IsDigit)).Select(t => Expand(t).Distinct(StringComparer.OrdinalIgnoreCase).ToList()).ToList();
+        if (groups.Count == 0) return new();
+        var cand = new Dictionary<int, Part>();
+        foreach (var w in groups.SelectMany(g => g).Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (var p in await parts.Where(p => EF.Functions.Like(p.PartNumber + " " + p.Name + " " + (p.Specification ?? "") + " " + (p.Brand ?? "")
+                         + " " + (p.Category ?? "") + " " + (p.Location ?? "") + " " + (p.Machine ?? "") + " " + (p.Remarks ?? ""), "%" + EscapeLike(w) + "%", "\\"))
+                         .Take(100).ToListAsync())
+                cand[p.Id] = p;
+
+        // Hitung kelompok kata yang cocok di AWAL kata (supaya "oli" tidak cocok dengan "Solid").
+        int Hits(Part p)
+        {
+            var hay = Haystack(p);
+            return groups.Count(g => g.Any(w => Regex.IsMatch(hay, @"(?<![\p{L}\p{N}])" + Regex.Escape(w), RegexOptions.IgnoreCase)));
+        }
+        return cand.Values.Select(p => (p, h: Hits(p))).Where(x => x.h > 0)
+            .OrderByDescending(x => x.h).ThenByDescending(x => x.p.StockQty > 0).ThenBy(x => x.p.PartNumber)
+            .Take(take).Select(x => x.p).ToList();
+    }
 }

@@ -256,6 +256,96 @@ namespace SparePartControl.Migrations
                     b.ToTable("Parts");
                 });
 
+            modelBuilder.Entity("SparePartControl.Models.PartRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HandledBy")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IssueDocNo")
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Line")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReqNo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequesterName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResponseNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SiteId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Urgency")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Status");
+
+                    b.ToTable("PartRequests");
+                });
+
+            modelBuilder.Entity("SparePartControl.Models.PartRequestLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FreeText")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PartId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("Qty")
+                        .HasColumnType("REAL");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PartId");
+
+                    b.HasIndex("RequestId");
+
+                    b.ToTable("PartRequestLines");
+                });
+
             modelBuilder.Entity("SparePartControl.Models.Site", b =>
                 {
                     b.Property<int>("Id")
@@ -485,6 +575,33 @@ namespace SparePartControl.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("SparePartControl.Models.PartRequest", b =>
+                {
+                    b.HasOne("SparePartControl.Models.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SparePartControl.Models.PartRequestLine", b =>
+                {
+                    b.HasOne("SparePartControl.Models.Part", "Part")
+                        .WithMany()
+                        .HasForeignKey("PartId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SparePartControl.Models.PartRequest", "Request")
+                        .WithMany("Lines")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Part");
+
+                    b.Navigation("Request");
+                });
+
             modelBuilder.Entity("SparePartControl.Models.StockCheckItem", b =>
                 {
                     b.HasOne("SparePartControl.Models.Part", "Part")
@@ -545,6 +662,11 @@ namespace SparePartControl.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SparePartControl.Models.PartRequest", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("SparePartControl.Models.StockCheckSession", b =>

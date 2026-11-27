@@ -17,6 +17,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AuthorizePage("/Entry", "Admin");
     o.Conventions.AuthorizePage("/Parts/Edit", "Admin");
     o.Conventions.AuthorizePage("/Parts/Import", "Admin");
+    o.Conventions.AuthorizeFolder("/Requests", "Admin");
     // Pengaturan, kurs, site dan user: hanya admin dengan akses semua site.
     o.Conventions.AuthorizeFolder("/Settings", "SuperAdmin");
     o.Conventions.AuthorizeFolder("/Users", "SuperAdmin");
@@ -31,6 +32,7 @@ builder.Services.AddScoped<StockService>();
 builder.Services.AddSingleton<AppSettingsService>();
 builder.Services.AddScoped<PartCode>();
 builder.Services.AddScoped<MasterImport>();
+builder.Services.AddScoped<RequestService>();
 builder.Services.AddSingleton<ImageStore>();
 builder.Services.AddSingleton<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 // Versi berikutnya: ganti NullRackLocator dengan implementasi lampu/LCD rak.
@@ -59,6 +61,7 @@ builder.Services.AddAuthorization(o =>
     // Semua halaman & API wajib login kecuali yang ditandai AllowAnonymous.
     o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
     o.AddPolicy("Admin", p => p.RequireRole(nameof(UserRole.Admin)));
+    o.AddPolicy("Kiosk", p => p.RequireRole(nameof(UserRole.Requester), nameof(UserRole.Admin)));
     o.AddPolicy("SuperAdmin", p => p.RequireRole(nameof(UserRole.Admin)).RequireClaim("allsites", "1"));
 });
 
@@ -78,7 +81,27 @@ if (!app.Environment.IsDevelopment()) app.UseExceptionHandler("/Error");
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+// Akun tablet peminta (Requester) hanya boleh membuka halaman permintaan.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.User.IsInRole(nameof(UserRole.Requester)))
+    {
+        var path = ctx.Request.Path.Value ?? "/";
+        string[] allowed = { "/Request", "/api/request/", "/Account/Login", "/Account/AccessDenied", "/qr", "/lib/", "/css/", "/js/", "/favicon" };
+        var isImage = System.Text.RegularExpressions.Regex.IsMatch(path, @"^/parts/\d+/image$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!isImage && !allowed.Any(a => path.Equals(a, StringComparison.OrdinalIgnoreCase) || path.StartsWith(a.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase)
+                                          || (a.EndsWith('/') && path.StartsWith(a, StringComparison.OrdinalIgnoreCase))))
+        {
+            if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)) { ctx.Response.StatusCode = 403; return; }
+            ctx.Response.Redirect("/Request");
+            return;
+        }
+    }
+    await next();
+});
 app.UseAuthorization();
+
+
 app.MapRazorPages();
 
 // ---- API kecil untuk scan QR / pencarian part / popup detail ----
@@ -170,6 +193,93 @@ app.MapGet("/api/parts/find", async (string? q, string? f, string? model, int? t
     return Results.Json(new { total, items });
 });
 
+// ================= Permintaan part (tablet peminta) =================
+static bool IsAjax(HttpRequest r) => r.Headers["X-Requested-With"] == "XMLHttpRequest"; // cegah CSRF lintas situs
+
+// Katalog untuk tablet: tanpa harga/nilai. q kosong → part yang paling sering diminta / dipakai.
+app.MapGet("/api/request/catalog", async (string? q, AppDbContext db) =>
+{
+    List<Part> parts;
+    if (string.IsNullOrWhiteSpace(q))
+    {
+        var since = DateTime.Today.AddDays(-90);
+        var popular = await db.Transactions.AsNoTracking().Where(t => t.Type == TxType.Issue && t.Date >= since)
+            .GroupBy(t => t.PartId).Select(g => new { g.Key, N = g.Count() }).OrderByDescending(x => x.N).Take(12).Select(x => x.Key).ToListAsync();
+        parts = await db.Parts.AsNoTracking().Where(p => popular.Contains(p.Id)).ToListAsync();
+        parts = parts.OrderBy(p => popular.IndexOf(p.Id)).ToList();
+        if (parts.Count < 12)
+            parts.AddRange(await db.Parts.AsNoTracking().Where(p => !popular.Contains(p.Id) && p.Status == PartStatus.Active && p.StockQty > 0)
+                .OrderBy(p => p.Name).Take(12 - parts.Count).ToListAsync());
+    }
+    else
+    {
+        parts = await PartSearch.FuzzyAsync(db.Parts.AsNoTracking(), q, 24);
+    }
+    return Results.Json(parts.Select(p => new
+    {
+        p.Id, p.PartNumber, p.Name, p.Specification, p.Unit, p.ImageUrl, p.Category,
+        Available = p.StockQty > 0, Low = p.StockQty > 0 && p.StockQty <= p.MinStock
+    }));
+}).RequireAuthorization("Kiosk");
+
+app.MapPost("/api/request/submit", async (HttpRequest http, NewRequest body, RequestService svc) =>
+{
+    if (!IsAjax(http)) return Results.BadRequest();
+    var (req, error) = await svc.CreateAsync(body, http.HttpContext.User.Identity?.Name);
+    return req == null ? Results.BadRequest(new { error }) : Results.Json(new { req.Id, req.ReqNo });
+}).RequireAuthorization("Kiosk");
+
+// Papan status di tablet: permintaan 24 jam terakhir di site ini.
+app.MapGet("/api/request/board", async (AppDbContext db) =>
+{
+    var since = DateTime.Now.AddHours(-24);
+    var list = await db.PartRequests.AsNoTracking().Where(r => r.CreatedAt >= since || r.Status == RequestStatus.New || r.Status == RequestStatus.Processing || r.Status == RequestStatus.Ready)
+        .OrderByDescending(r => r.Id).Take(30)
+        .Select(r => new { r.Id, r.ReqNo, r.RequesterName, r.Line, r.Status, r.CreatedAt, r.UpdatedAt, r.ResponseNote, r.Urgency, Items = r.Lines.Count }).ToListAsync();
+    return Results.Json(list.Select(r => new
+    {
+        r.Id, r.ReqNo, r.RequesterName, r.Line, Status = r.Status.ToString(), StatusText = RequestService.StatusText(r.Status),
+        r.CreatedAt, r.UpdatedAt, r.ResponseNote, Urgent = r.Urgency == RequestUrgency.Urgent, r.Items
+    }));
+}).RequireAuthorization("Kiosk");
+
+// Notifikasi untuk PC ruang sparepart: permintaan yang belum selesai.
+app.MapGet("/api/requests/poll", async (AppDbContext db, SiteContext site) =>
+{
+    var open = await db.PartRequests.AsNoTracking()
+        .Where(r => r.Status == RequestStatus.New || r.Status == RequestStatus.Processing || r.Status == RequestStatus.Ready)
+        .OrderByDescending(r => r.Id).Take(50)
+        .Select(r => new { r.Id, r.SiteId, r.ReqNo, r.RequesterName, r.Line, r.Status, r.Urgency, r.CreatedAt, Items = r.Lines.Count }).ToListAsync();
+    return Results.Json(new
+    {
+        newCount = open.Count(r => r.Status == RequestStatus.New),
+        openCount = open.Count,
+        items = open.Select(r => new
+        {
+            r.Id, r.ReqNo, r.RequesterName, r.Line, Status = r.Status.ToString(), StatusText = RequestService.StatusText(r.Status),
+            Urgent = r.Urgency == RequestUrgency.Urgent, r.CreatedAt, r.Items, Site = site.MultiSiteSystem ? site.CodeOf(r.SiteId) : null
+        })
+    });
+}).RequireAuthorization("Admin");
+
+app.MapGet("/api/requests/{id:int}", async (int id, RequestService svc) =>
+    await svc.DetailAsync(id) is { } d ? Results.Json(d) : Results.NotFound()).RequireAuthorization("Admin");
+
+app.MapPost("/api/requests/{id:int}/status", async (int id, HttpRequest http, StatusBody body, RequestService svc) =>
+{
+    if (!IsAjax(http)) return Results.BadRequest();
+    if (!Enum.TryParse<RequestStatus>(body.Status, true, out var st) || st == RequestStatus.Done) return Results.BadRequest(new { error = "Status tidak valid." });
+    var err = await svc.SetStatusAsync(id, st, body.Note, http.HttpContext.User.Identity?.Name);
+    return err == null ? Results.Ok() : Results.BadRequest(new { error = err });
+}).RequireAuthorization("Admin");
+
+app.MapPost("/api/requests/{id:int}/lines/{lineId:int}/link", async (int id, int lineId, HttpRequest http, LinkBody body, RequestService svc) =>
+{
+    if (!IsAjax(http)) return Results.BadRequest();
+    var err = await svc.LinkLineAsync(id, lineId, body.PartId);
+    return err == null ? Results.Ok() : Results.BadRequest(new { error = err });
+}).RequireAuthorization("Admin");
+
 // Tombol "Location": minta rak memberi sinyal posisi part (lampu berkedip / LCD). Khusus Admin.
 app.MapPost("/api/parts/{id:int}/locate", async (int id, HttpRequest req, AppDbContext db, IRackLocator rack, CancellationToken ct) =>
 {
@@ -194,3 +304,6 @@ app.MapGet("/qr", (string? c, int? s) =>
 });
 
 app.Run();
+
+record StatusBody(string? Status, string? Note);
+record LinkBody(int? PartId);

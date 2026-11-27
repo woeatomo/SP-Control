@@ -14,6 +14,7 @@
                     <select name="role" class="form-select">
                         <option value="Viewer">Viewer — hanya melihat &amp; export</option>
                         <option value="Admin">Admin — transaksi &amp; ubah data di site-nya</option>
+                        <option value="Requester">Peminta (tablet) — hanya membuat permintaan part</option>
                     </select>
                 </div>
                 <div class="mb-2">
@@ -48,6 +49,7 @@
                                         <select name="role" class="form-select form-select-sm" style="width:110px" onchange="this.form.submit()" disabled="@me">
                                             <option value="Admin" selected="@(u.Role == UserRole.Admin)">Admin</option>
                                             <option value="Viewer" selected="@(u.Role == UserRole.Viewer)">Viewer</option>
+                                            <option value="Requester" selected="@(u.Role == UserRole.Requester)">Peminta (tablet)</option>
                                         </select>
                                     </form>
                                 </td>
@@ -99,7 +101,7 @@
         </div>
         <p class="small text-muted mt-2">
             <b>Admin + Semua site</b> = pengelola sistem (site, user, kurs, format kode). <b>Admin</b> dengan site tertentu = admin section: transaksi dan master data hanya di site-nya.
-            <b>Viewer</b> hanya melihat site yang diberikan. User yang dinonaktifkan atau diubah role / akses semua site-nya langsung keluar dari sesi.
+            <b>Viewer</b> hanya melihat site yang diberikan. <b>Peminta (tablet)</b> hanya bisa membuka halaman permintaan part (tanpa harga) — beri akses ke satu site, lalu login sekali di tablet (tetap login 30 hari). User yang dinonaktifkan atau diubah role / akses semua site-nya langsung keluar dari sesi.
         </p>
     </div>
 </div>

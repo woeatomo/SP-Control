@@ -16,6 +16,8 @@ public class AppDbContext : DbContext
     public int[]? SiteIds => _site?.FilterIds;
 
     public DbSet<Site> Sites => Set<Site>();
+    public DbSet<PartRequest> PartRequests => Set<PartRequest>();
+    public DbSet<PartRequestLine> PartRequestLines => Set<PartRequestLine>();
     public DbSet<UserSite> UserSites => Set<UserSite>();
 
     public DbSet<Part> Parts => Set<Part>();
@@ -49,6 +51,13 @@ public class AppDbContext : DbContext
         b.Entity<StockTransaction>().HasOne<Site>().WithMany().HasForeignKey(t => t.SiteId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Loan>().HasOne<Site>().WithMany().HasForeignKey(t => t.SiteId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<StockCheckSession>().HasOne(s => s.Site).WithMany().HasForeignKey(t => t.SiteId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<PartRequest>().HasIndex(r => new { r.SiteId, r.Status });
+        b.Entity<PartRequest>().HasOne<Site>().WithMany().HasForeignKey(r => r.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PartRequestLine>().HasOne(l => l.Request).WithMany(r => r.Lines).HasForeignKey(l => l.RequestId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<PartRequestLine>().HasOne(l => l.Part).WithMany().HasForeignKey(l => l.PartId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<PartRequest>().HasQueryFilter(r => SiteIds == null || SiteIds.Contains(r.SiteId));
+        b.Entity<PartRequestLine>().HasQueryFilter(l => SiteIds == null || SiteIds.Contains(l.Request.SiteId));
 
         b.Entity<Part>().HasQueryFilter(p => SiteIds == null || SiteIds.Contains(p.SiteId));
         b.Entity<StockTransaction>().HasQueryFilter(t => SiteIds == null || SiteIds.Contains(t.SiteId));

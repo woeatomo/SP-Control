@@ -1,0 +1,79 @@
+@page
+@model SparePartControl.Pages.Requests.IndexModel
+@{ ViewData["Title"] = "Permintaan Part"; }
+<div class="dash">
+    <div class="dash-head">
+        <div>
+            <div class="dash-date" style="text-transform:none">Dari tablet di ruang produksi / maintenance</div>
+            <h1 class="dash-title">Permintaan part <partial name="_SiteTitle" /></h1>
+        </div>
+        <div class="dash-actions">
+            <button type="button" class="btn btn-light" id="btnSound"></button>
+            <a class="btn btn-light" href="/Request" target="_blank" title="Buka tampilan tablet peminta">Tampilan tablet ↗</a>
+        </div>
+    </div>
+    <ul class="nav nav-pills dash-tabs mb-3 d-inline-flex">
+        <li class="nav-item"><a class="nav-link @(Model.Tab == "open" ? "active" : "")" href="?Tab=open">Belum selesai <b>@Model.C(RequestStatus.New, RequestStatus.Processing, RequestStatus.Ready)</b></a></li>
+        <li class="nav-item"><a class="nav-link @(Model.Tab == "done" ? "active" : "")" href="?Tab=done">Selesai <b>@Model.C(RequestStatus.Done)</b></a></li>
+        <li class="nav-item"><a class="nav-link @(Model.Tab == "rejected" ? "active" : "")" href="?Tab=rejected">Ditolak <b>@Model.C(RequestStatus.Rejected)</b></a></li>
+        <li class="nav-item"><a class="nav-link @(Model.Tab == "all" ? "active" : "")" href="?Tab=all">Semua</a></li>
+    </ul>
+    <div class="panel">
+        @if (Model.Items.Count == 0)
+        {
+            <div class="empty-state">Tidak ada permintaan di sini. Permintaan baru dari tablet akan muncul otomatis dengan bunyi notifikasi.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-borderless dash-table align-middle mb-0">
+                    <thead><tr>@if (SiteCtx.IsAll) { <th>Site</th> }<th>No.</th><th>Peminta</th><th>Part diminta</th><th>Waktu</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in Model.Items)
+                        {
+                            <tr class="req-row" data-id="@r.Id" style="cursor:pointer">
+                                @if (SiteCtx.IsAll) { <td><span class="site-tag">@SiteCtx.CodeOf(r.SiteId)</span></td> }
+                                <td class="nowrap"><span class="font-monospace small">@r.ReqNo</span>@if (r.Urgency == RequestUrgency.Urgent) { <span class="badge bg-danger ms-1">⚡ Urgent</span> }</td>
+                                <td><b>@r.RequesterName</b><div class="small text-muted">@r.Line</div></td>
+                                <td class="small" style="max-width:420px">
+                                    @foreach (var l in r.Lines.Take(3))
+                                    {
+                                        <div class="text-truncate">@StockService.Fmt(l.Qty) × @(l.Part != null ? l.Part.PartNumber + " — " + l.Part.Name : "“" + l.FreeText + "”")
+                                            @if (l.Part == null) { <span class="badge bg-light text-dark border">teks</span> }</div>
+                                    }
+                                    @if (r.Lines.Count > 3) { <div class="text-muted">+@(r.Lines.Count - 3) lainnya</div> }
+                                </td>
+                                <td class="nowrap small">@SparePartControl.Pages.IndexModel.Ago(r.CreatedAt)@if (r.HandledBy != null) { <div class="text-muted">oleh @r.HandledBy</div> }</td>
+                                <td><span class="req-st @(r.Status switch { RequestStatus.New => "st-new", RequestStatus.Processing => "st-proc", RequestStatus.Ready => "st-ready", RequestStatus.Done => "st-done", _ => "st-rej" })">@RequestService.StatusText(r.Status)</span>
+                                    @if (r.IssueDocNo != null) { <div class="small text-muted font-monospace">@r.IssueDocNo</div> }</td>
+                                <td class="text-end"><span class="link-arrow">Buka →</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+@section Scripts {
+<script>
+    document.querySelectorAll('.req-row').forEach(r => r.addEventListener('click', () => SPReq.open(r.dataset.id)));
+    // Muat ulang daftar saat ada perubahan (kecuali popup sedang terbuka).
+    let lastSig = null;
+    document.addEventListener('sp:requests', e => {
+        const sig = e.detail.items.map(x => x.id + x.status).join();
+        if (lastSig !== null && sig !== lastSig && !document.querySelector('.modal.show')) location.reload();
+        lastSig = sig;
+    });
+    document.getElementById('reqModal')?.addEventListener('hidden.bs.modal', () => location.reload());
+    // Tombol suara: tes & aktifkan / matikan.
+    const b = document.getElementById('btnSound');
+    const label = () => b.textContent = SPSound.enabled() ? '🔔 Suara aktif — tes' : '🔕 Suara mati';
+    b.addEventListener('click', () => {
+        if (SPSound.enabled() && b.dataset.tested) { SPSound.setEnabled(false); delete b.dataset.tested; }
+        else { SPSound.setEnabled(true); SPSound.unlock(); setTimeout(() => SPSound.play('message'), 50); b.dataset.tested = '1'; }
+        label();
+    });
+    label();
+</script>
+}

@@ -46,8 +46,12 @@ public class LoginModel : PageModel
             new(ClaimTypes.Role, u.Role.ToString()),
             new("allsites", u.AllSites ? "1" : "0")
         };
+        // Tablet peminta tetap login 30 hari supaya tidak perlu login ulang setiap shift.
+        var props = new AuthenticationProperties();
+        if (u.Role == UserRole.Requester) { props.IsPersistent = true; props.ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30); props.AllowRefresh = true; }
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)));
+            new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)), props);
+        if (u.Role == UserRole.Requester) return LocalRedirect("/Request");
         return LocalRedirect(Url.IsLocalUrl(ReturnUrl) ? ReturnUrl! : "/");
     }
 

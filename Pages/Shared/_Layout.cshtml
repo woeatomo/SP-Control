@@ -28,15 +28,35 @@
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link @Act("/")" asp-page="/Index">Dashboard</a></li>
                     <li class="nav-item"><a class="nav-link @Act("/Search")" asp-page="/Search">Cari Part</a></li>
-                    <li class="nav-item"><a class="nav-link @(path.StartsWith("/Parts") && !path.StartsWith("/Parts/Labels") ? "active" : "")" asp-page="/Parts/Index">Master Data</a></li>
-                    <li class="nav-item"><a class="nav-link @Act("/Parts/Labels")" asp-page="/Parts/Labels">Label QR</a></li>
                     @if (isAdmin)
                     {
-                        <li class="nav-item"><a class="nav-link @Act("/Entry/issue")" href="/Entry/issue">Issued</a></li>
-                        <li class="nav-item"><a class="nav-link @Act("/Entry/in")" href="/Entry/in">Input</a></li>
+                        <li class="nav-item"><a class="nav-link @Act("/Requests")" asp-page="/Requests/Index">Permintaan <span class="badge rounded-pill bg-danger d-none" id="reqBadge">0</span></a></li>
                     }
-                    <li class="nav-item"><a class="nav-link @(Act("/Entry/loan") + Act("/Loans"))" asp-page="/Loans/Index">Loan</a></li>
-                    <li class="nav-item"><a class="nav-link @Act("/Transactions")" asp-page="/Transactions/Index">Riwayat</a></li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle @(Act("/Parts"))" href="#" role="button" data-bs-toggle="dropdown">Master Data</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" asp-page="/Parts/Index">Master Data Part</a></li>
+                            <li><a class="dropdown-item" asp-page="/Parts/Labels">Cetak Label QR</a></li>
+                            @if (isAdmin)
+                            {
+                                <li><a class="dropdown-item" asp-page="/Parts/Edit">+ Part Baru</a></li>
+                                <li><a class="dropdown-item" asp-page="/Parts/Import">Import / Export Excel</a></li>
+                            }
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle @(Act("/Entry") + Act("/Loans") + Act("/Transactions"))" href="#" role="button" data-bs-toggle="dropdown">Transaksi</a>
+                        <ul class="dropdown-menu">
+                            @if (isAdmin)
+                            {
+                                <li><a class="dropdown-item" href="/Entry/issue">↗ Issued (pemakaian)</a></li>
+                                <li><a class="dropdown-item" href="/Entry/in">↘ Input (stok masuk)</a></li>
+                            }
+                            <li><a class="dropdown-item" asp-page="/Loans/Index">⇄ Loan</a></li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li><a class="dropdown-item" asp-page="/Transactions/Index">Riwayat transaksi</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link @Act("/StockChecks")" asp-page="/StockChecks/Index">Stock Checking</a></li>
                     <li class="nav-item"><a class="nav-link @Act("/Reports")" asp-page="/Reports/Index">Report</a></li>
                     @if (isAdmin && SiteCtx.IsSuperAdmin)
@@ -126,11 +146,17 @@
     </div>
 
     @if (User.Identity?.IsAuthenticated == true) { <partial name="_PartPopup" /> }
+    @if (isAdmin && SiteCtx.Allowed.Count > 0) { <partial name="_RequestModal" /> }
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/lib/html5-qrcode/html5-qrcode.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    @if (isAdmin && SiteCtx.Allowed.Count > 0)
+    {
+        <script src="~/js/notify.js" asp-append-version="true"></script>
+        <script src="~/js/requests.js" asp-append-version="true"></script>
+    }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

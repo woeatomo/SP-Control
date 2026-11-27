@@ -1,0 +1,278 @@
+@page
+@model SparePartControl.Pages.Request.IndexModel
+@{
+    Layout = "_KioskLayout";
+    ViewData["Title"] = "Permintaan Spare Part";
+    var site = Model.Site.Current;
+    var company = Model.Settings.Company;
+}
+<div class="kz">
+    <header class="kz-head">
+        <div class="kz-brand">
+            <div class="kz-logo" aria-hidden="true">⚙</div>
+            <div>
+                <div class="kz-title">Permintaan Spare Part</div>
+                <div class="kz-sub">@(string.IsNullOrWhiteSpace(company.CompanyName) ? company.AppTitle : company.CompanyName)@(site != null ? " · " + site.Name : "")</div>
+            </div>
+        </div>
+        <div class="kz-head-right">
+            <button type="button" class="kz-status-btn" id="btnBoard">📋 Status permintaan <span class="kz-dot d-none" id="readyDot"></span></button>
+            <div class="kz-clock" id="clock"></div>
+        </div>
+    </header>
+
+    @if (site == null)
+    {
+        <div class="kz-empty-site">Akun tablet ini belum diberi akses ke site. Hubungi admin spare part.</div>
+    }
+    else
+    {
+    <main class="kz-main">
+        <section class="kz-catalog">
+            <div class="kz-search">
+                <span class="kz-search-ico" aria-hidden="true">⌕</span>
+                <input id="q" type="search" placeholder="Cari part yang dibutuhkan… (nama, ukuran, kode)" autocomplete="off" aria-label="Cari part" />
+                <button type="button" class="kz-scan" id="btnScan" title="Scan QR">📷</button>
+            </div>
+            <div class="kz-hint" id="hint">Part yang sering diminta</div>
+            <div class="kz-grid" id="grid" aria-live="polite"></div>
+
+            <div class="kz-free">
+                <div class="kz-free-title">Tidak menemukan part-nya?</div>
+                <div class="kz-free-sub">Tulis saja apa yang dibutuhkan — tim spare part akan mencarikan.</div>
+                <div class="kz-free-row">
+                    <input id="freeText" maxlength="200" placeholder="mis. bearing 6205, belt untuk conveyor line 2, sensor proximity M18…" />
+                    <button type="button" class="kz-btn-dark" id="btnFree">+ Tambahkan</button>
+                </div>
+            </div>
+        </section>
+
+        <aside class="kz-cart" id="cart">
+            <div class="kz-cart-title">Permintaan Anda <span class="kz-count" id="count">0</span></div>
+
+            <label class="kz-label" for="name">Nama peminta</label>
+            <input id="name" class="kz-input" maxlength="100" placeholder="Nama Anda" autocomplete="off" />
+            <div class="kz-chips" id="nameChips"></div>
+
+            <label class="kz-label" for="line">Line / mesin</label>
+            <input id="line" class="kz-input" maxlength="120" placeholder="mis. Injection Line 2" autocomplete="off" />
+            <div class="kz-chips" id="lineChips"></div>
+
+            <div class="kz-seg" role="radiogroup" aria-label="Urgensi">
+                <button type="button" class="active" data-urgent="0" role="radio" aria-checked="true">Normal</button>
+                <button type="button" data-urgent="1" role="radio" aria-checked="false">⚡ Urgent / mesin stop</button>
+            </div>
+
+            <ul class="kz-items" id="items"></ul>
+            <div class="kz-items-empty" id="itemsEmpty">Belum ada part. Pilih dari daftar di samping, atau tulis permintaan.</div>
+
+            <textarea id="notes" class="kz-input" rows="2" maxlength="500" placeholder="Catatan (opsional)"></textarea>
+            <div class="kz-error" id="err"></div>
+            <button type="button" class="kz-send" id="btnSend" disabled>Kirim Permintaan</button>
+        </aside>
+    </main>
+
+    <button type="button" class="kz-mobilebar" id="mobileBar">Lihat permintaan (<span id="mCount">0</span>) ↓</button>
+    }
+
+    <footer class="kz-foot">
+        <span>Masuk sebagai @User.Identity?.Name</span>
+        <form method="post" asp-page="/Account/Login" asp-page-handler="Logout" class="d-inline"><button class="kz-link" type="submit">Keluar</button></form>
+    </footer>
+
+    @* Layar sukses *@
+    <div class="kz-done" id="done" aria-live="assertive">
+        <div class="kz-done-card">
+            <div class="kz-check" aria-hidden="true">✓</div>
+            <div class="kz-done-title">Permintaan terkirim</div>
+            <div class="kz-done-no" id="doneNo"></div>
+            <div class="kz-done-text">Tim spare part sudah menerima notifikasi. Pantau status di tombol <b>Status permintaan</b> — layar ini akan memberi tahu saat part siap diambil.</div>
+            <button type="button" class="kz-send" id="btnNew">Buat permintaan baru</button>
+            <div class="kz-done-timer" id="doneTimer"></div>
+        </div>
+    </div>
+
+    @* Papan status *@
+    <div class="kz-sheet" id="board" aria-hidden="true">
+        <div class="kz-sheet-card">
+            <div class="kz-sheet-head"><div class="kz-cart-title mb-0">Status permintaan · 24 jam terakhir</div><button type="button" class="btn-close" id="boardClose" aria-label="Tutup"></button></div>
+            <div id="boardList"></div>
+        </div>
+    </div>
+    <div class="kz-toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    const $ = id => document.getElementById(id), esc = SP.esc, fmt = SP.fmt;
+    const H = { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' };
+    // Jam
+    const tick = () => { const c = $('clock'); if (c) c.textContent = new Date().toLocaleString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+    tick(); setInterval(tick, 15000);
+
+    let cart = [], urgent = false, seq = 0, timer;
+    const grid = $('grid');
+
+    // Nama & line yang pernah dipakai di tablet ini (memudahkan pengisian berikutnya).
+    const mem = (k) => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { return []; } };
+    const remember = (k, v) => { v = (v || '').trim(); if (!v) return; try { localStorage.setItem(k, JSON.stringify([v, ...mem(k).filter(x => x.toLowerCase() !== v.toLowerCase())].slice(0, 6))); } catch (e) { } };
+    function chips() {
+        [['nameChips', 'kz_names', 'name'], ['lineChips', 'kz_lines', 'line']].forEach(([el, k, input]) => {
+            const box = $(el); if (!box) return;
+            box.innerHTML = mem(k).map(v => `<button type="button" data-v="${esc(v)}">${esc(v)}</button>`).join('');
+            box.onclick = e => { const b = e.target.closest('button'); if (b) { $(input).value = b.dataset.v; validate(); } };
+        });
+    }
+
+    function cardHtml(p) {
+        const inCart = cart.find(c => c.partId === p.id);
+        const avail = p.available ? (p.low ? '<span class="kz-pill warn">Stok terbatas</span>' : '<span class="kz-pill ok">Tersedia</span>') : '<span class="kz-pill no">Stok habis</span>';
+        return `<button type="button" class="kz-card ${inCart ? 'in' : ''}" data-id="${p.id}">
+            <div class="kz-card-img">${p.imageUrl ? `<img src="${p.imageUrl}" alt="" loading="lazy">` : '<span>⚙</span>'}${inCart ? `<span class="kz-badge">${fmt(inCart.qty)}</span>` : ''}</div>
+            <div class="kz-card-name">${esc(p.name)}</div>
+            <div class="kz-card-code">${esc(p.partNumber)}</div>
+            ${avail}
+        </button>`;
+    }
+    let lastList = [];
+    async function search() {
+        if (!grid) return;
+        const q = $('q').value.trim(), my = ++seq;
+        const r = await fetch('/api/request/catalog?q=' + encodeURIComponent(q));
+        if (my !== seq) return;
+        lastList = r.ok ? await r.json() : [];
+        $('hint').textContent = q ? (lastList.length ? `${lastList.length} part cocok` : 'Tidak ada part yang cocok — tulis permintaan di bawah.') : 'Part yang sering diminta';
+        grid.innerHTML = lastList.map(cardHtml).join('');
+        if (q && !lastList.length) $('freeText').value = q;
+    }
+    function rerenderGrid() { if (grid) grid.innerHTML = lastList.map(cardHtml).join(''); }
+
+    function add(item) {
+        const ex = item.partId ? cart.find(c => c.partId === item.partId) : null;
+        if (ex) ex.qty += 1; else cart.push({ ...item, qty: 1 });
+        renderCart(); rerenderGrid();
+        const btn = $('mobileBar'); if (btn) { btn.classList.add('bump'); setTimeout(() => btn.classList.remove('bump'), 300); }
+    }
+    function renderCart() {
+        const n = cart.reduce((s, c) => s + 1, 0);
+        $('count').textContent = n; $('mCount').textContent = n;
+        $('itemsEmpty').style.display = n ? 'none' : '';
+        $('items').innerHTML = cart.map((c, i) => `<li>
+            <div class="kz-item-img">${c.imageUrl ? `<img src="${c.imageUrl}" alt="">` : (c.partId ? '⚙' : '✎')}</div>
+            <div class="kz-item-text"><div class="kz-item-name">${esc(c.name)}</div><div class="kz-item-code">${c.partId ? esc(c.code) : 'ditulis manual'}</div></div>
+            <div class="kz-step"><button type="button" data-i="${i}" data-d="-1" aria-label="Kurangi">−</button><span>${fmt(c.qty)}</span><button type="button" data-i="${i}" data-d="1" aria-label="Tambah">+</button></div>
+        </li>`).join('');
+        validate();
+    }
+    function validate() {
+        const ok = cart.length > 0 && $('name').value.trim().length > 0;
+        $('btnSend').disabled = !ok;
+        $('btnSend').textContent = !cart.length ? 'Kirim Permintaan' : !$('name').value.trim() ? 'Isi nama peminta' : `Kirim Permintaan (${cart.length} item)`;
+    }
+
+    if (grid) {
+        $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 220); });
+        $('q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); search(); $('q').blur(); } });
+        grid.addEventListener('click', e => {
+            const c = e.target.closest('.kz-card'); if (!c) return;
+            const p = lastList.find(x => x.id == c.dataset.id);
+            add({ partId: p.id, name: p.name, code: p.partNumber, imageUrl: p.imageUrl });
+        });
+        $('btnFree').addEventListener('click', () => {
+            const t = $('freeText').value.trim(); if (!t) { $('freeText').focus(); return; }
+            add({ partId: null, name: t, text: t }); $('freeText').value = '';
+        });
+        $('freeText').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('btnFree').click(); } });
+        $('items').addEventListener('click', e => {
+            const b = e.target.closest('button[data-i]'); if (!b) return;
+            const c = cart[+b.dataset.i]; c.qty += +b.dataset.d;
+            if (c.qty <= 0) cart.splice(+b.dataset.i, 1);
+            renderCart(); rerenderGrid();
+        });
+        ['name', 'line'].forEach(id => $(id).addEventListener('input', validate));
+        document.querySelectorAll('.kz-seg button').forEach(b => b.addEventListener('click', () => {
+            urgent = b.dataset.urgent === '1';
+            document.querySelectorAll('.kz-seg button').forEach(x => { x.classList.toggle('active', x === b); x.setAttribute('aria-checked', x === b); });
+        }));
+        $('btnScan').addEventListener('click', () => SP.scan(async code => {
+            $('q').value = code; await search();
+            if (lastList.length === 1 || lastList.some(p => p.partNumber.toLowerCase() === code.toLowerCase())) {
+                const p = lastList.find(p => p.partNumber.toLowerCase() === code.toLowerCase()) || lastList[0];
+                add({ partId: p.id, name: p.name, code: p.partNumber, imageUrl: p.imageUrl });
+            }
+        }));
+        $('mobileBar').addEventListener('click', () => $('cart').scrollIntoView({ behavior: 'smooth' }));
+
+        $('btnSend').addEventListener('click', async () => {
+            const btn = $('btnSend'); btn.disabled = true; btn.textContent = 'Mengirim…'; $('err').textContent = '';
+            const body = {
+                name: $('name').value, line: $('line').value, urgent, notes: $('notes').value,
+                items: cart.map(c => ({ partId: c.partId, text: c.partId ? null : c.text, qty: c.qty }))
+            };
+            try {
+                const r = await fetch('/api/request/submit', { method: 'POST', headers: H, body: JSON.stringify(body) });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok) { $('err').textContent = j.error || 'Gagal mengirim. Coba lagi.'; validate(); return; }
+                remember('kz_names', body.name); remember('kz_lines', body.line);
+                showDone(j.reqNo);
+            } catch (e) { $('err').textContent = 'Koneksi terputus. Coba lagi.'; validate(); }
+        });
+    }
+
+    // Layar sukses → kembali otomatis untuk peminta berikutnya.
+    let doneTimer;
+    function reset() {
+        cart = []; urgent = false; ['name', 'line', 'notes', 'q', 'freeText'].forEach(id => { if ($(id)) $(id).value = ''; });
+        document.querySelectorAll('.kz-seg button').forEach((x, i) => x.classList.toggle('active', i === 0));
+        $('done').classList.remove('show'); clearInterval(doneTimer);
+        renderCart(); chips(); search(); window.scrollTo(0, 0);
+    }
+    function showDone(no) {
+        $('doneNo').textContent = no; $('done').classList.add('show');
+        let s = 15; $('doneTimer').textContent = `Kembali otomatis dalam ${s} detik`;
+        clearInterval(doneTimer);
+        doneTimer = setInterval(() => { s--; $('doneTimer').textContent = `Kembali otomatis dalam ${s} detik`; if (s <= 0) reset(); }, 1000);
+        loadBoard();
+    }
+    $('btnNew').addEventListener('click', reset);
+
+    // Papan status + bunyi saat permintaan siap diambil.
+    const stCls = { New: 'st-new', Processing: 'st-proc', Ready: 'st-ready', Done: 'st-done', Rejected: 'st-rej' };
+    let known = null;
+    async function loadBoard() {
+        let list;
+        try { const r = await fetch('/api/request/board', { cache: 'no-store' }); if (!r.ok) return; list = await r.json(); } catch (e) { return; }
+        $('boardList').innerHTML = list.length ? list.map(r => `<div class="kz-row ${r.status === 'Ready' ? 'ready' : ''}">
+                <div><div class="kz-row-no">${esc(r.reqNo)} ${r.urgent ? '<span class="kz-pill no">⚡ Urgent</span>' : ''}</div>
+                <div class="kz-row-who">${esc(r.requesterName)}${r.line ? ' · ' + esc(r.line) : ''} · ${r.items} item · ${new Date(r.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+                ${r.responseNote ? `<div class="kz-row-note">💬 ${esc(r.responseNote)}</div>` : ''}</div>
+                <span class="req-st ${stCls[r.status]}">${esc(r.statusText)}</span></div>`).join('')
+            : '<div class="kz-items-empty">Belum ada permintaan dalam 24 jam terakhir.</div>';
+        const ready = list.filter(r => r.status === 'Ready');
+        $('readyDot').classList.toggle('d-none', !ready.length);
+        if (known) {
+            list.forEach(r => {
+                const before = known[r.id];
+                if (before && before !== r.status && (r.status === 'Ready' || r.status === 'Rejected')) {
+                    SPSound.play('ready');
+                    showToast(r.status === 'Ready' ? `✓ <b>${esc(r.reqNo)}</b> siap diambil — ${esc(r.requesterName)}` : `✕ <b>${esc(r.reqNo)}</b> ditolak${r.responseNote ? ': ' + esc(r.responseNote) : ''}`, r.status === 'Ready');
+                }
+            });
+        }
+        known = Object.fromEntries(list.map(r => [r.id, r.status]));
+    }
+    function showToast(html, ok) {
+        const t = $('toast'); t.innerHTML = html; t.className = 'kz-toast show ' + (ok ? 'ok' : 'no');
+        clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 12000);
+    }
+    const sheet = $('board');
+    $('btnBoard').addEventListener('click', () => { loadBoard(); sheet.classList.add('show'); sheet.setAttribute('aria-hidden', 'false'); });
+    $('boardClose').addEventListener('click', () => { sheet.classList.remove('show'); sheet.setAttribute('aria-hidden', 'true'); });
+    sheet.addEventListener('click', e => { if (e.target === sheet) $('boardClose').click(); });
+
+    chips(); renderCart(); search(); loadBoard();
+    setInterval(loadBoard, 8000);
+})();
+</script>
+}

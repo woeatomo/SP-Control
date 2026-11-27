@@ -24,6 +24,7 @@ Semua halaman wajib login. Akun awal dibuat otomatis saat database pertama kali 
 |---|---|---|
 | `admin` | `admin123` | Admin — transaksi, ubah master data, kurs, stock checking, kelola user |
 | `viewer` | `viewer123` | Viewer — hanya melihat, mencari, export CSV, cetak label QR |
+| `tablet` | `tablet123` | Peminta (tablet) — hanya halaman permintaan part, tanpa harga |
 
 **Segera ganti kedua password ini** (klik nama user di kanan atas → Ganti Password, atau menu **User** → Reset). User baru, ubah role dan nonaktifkan akun ada di menu **User** (khusus Admin).
 
@@ -42,6 +43,15 @@ Semua halaman wajib login. Akun awal dibuat otomatis saat database pertama kali 
 | StockValue | dihitung | `nowStock × unit_USD` |
 
 **Import langsung dari Excel**: menu Master Data → **Import Excel** → upload `00. MASTER STOCK APP.xlsm` (atau .xlsx/.csv) → **Cek file** (belum menyimpan, menampilkan kolom yang dikenali dan baris bermasalah) → **Simpan import**. Kurs ikut diambil dari tabel `tblRate` bila ada. Goods code baru → `nowStock` jadi saldo awal; yang sudah ada → data master diperbarui (stok hanya disamakan bila opsi *samakan stok* dicentang, selisihnya tercatat sebagai Adjustment). **Export Excel** menghasilkan file dengan susunan kolom yang sama (+ sheet RATE), sehingga bisa diimport ulang.
+
+## Permintaan part dari tablet
+
+Untuk ruang sparepart yang terpisah dari ruang produksi / maintenance:
+
+- **Tablet di ruang produksi** login dengan akun berperan **Peminta (tablet)** (dibuat di menu User, tetap login 30 hari) dan langsung terbuka di halaman **/Request**: layar sentuh dengan katalog part (foto, nama, status *Tersedia / Stok terbatas / Stok habis*, tanpa harga), scan QR, dan kolom *"Tidak menemukan part-nya? Tulis saja"*. Isi nama, line/mesin, urgensi → **Kirim**. Tombol **Status permintaan** menampilkan proses (Menunggu → Sedang disiapkan → Siap diambil → Selesai / Ditolak) dan tablet berbunyi saat permintaan siap diambil.
+- **PC ruang sparepart (admin)** mengecek permintaan baru setiap 5 detik: **bunyi notifikasi** (nada "pesan masuk" yang disintesis di browser), badge di menu **Permintaan**, judul tab berkedip, dan **popup** permintaan. Part dari katalog langsung tampil dengan stok, rack dan tombol Location; permintaan berupa teks otomatis dicocokkan ke katalog (termasuk istilah Indonesia → Inggris, mis. *oli → oil, sabuk → belt*) dan ditampilkan sebagai pilihan — bila tidak ada yang cocok, hanya teks permintaannya yang tampil dengan tombol **Cari manual**.
+- Tombol di popup: **Proses**, **Siap diambil**, **Tolak** (alasan tampil di tablet), **Buat Issued** (form Issued terisi otomatis: PIC, line, no. permintaan, part; setelah disimpan permintaan otomatis *Selesai*).
+- Browser baru mengizinkan suara setelah ada satu klik di halaman; klik **🔔 Suara aktif — tes** di halaman Permintaan untuk memastikan. Notifikasi desktop Windows juga muncul bila browser diizinkan (perlu HTTPS atau localhost).
 
 ## Multi site / section
 

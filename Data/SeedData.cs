@@ -34,7 +34,9 @@ public static class SeedData
             admin.PasswordHash = hasher.HashPassword(admin, "admin123");
             var viewer = new AppUser { Username = "viewer", FullName = "Viewer", Role = UserRole.Viewer };
             viewer.PasswordHash = hasher.HashPassword(viewer, "viewer123");
-            db.Users.AddRange(admin, viewer);
+            var tablet = new AppUser { Username = "tablet", FullName = "Tablet Produksi", Role = UserRole.Requester };
+            tablet.PasswordHash = hasher.HashPassword(tablet, "tablet123");
+            db.Users.AddRange(admin, viewer, tablet);
             await db.SaveChangesAsync();
         }
 

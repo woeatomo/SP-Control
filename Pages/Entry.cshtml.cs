@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using SparePartControl.Data;
+using SparePartControl.Models;
 using SparePartControl.Services;
 
 namespace SparePartControl.Pages;
@@ -17,6 +18,9 @@ public class EntryModel : PageModel
     [BindProperty(SupportsGet = true)] public string Mode { get; set; } = "issue";
     [BindProperty] public EntryHeader Header { get; set; } = new();
     [BindProperty] public List<EntryLine> Lines { get; set; } = new();
+    /// <summary>Issued yang dibuat dari permintaan tablet.</summary>
+    [BindProperty(SupportsGet = true, Name = "request")] public int? RequestId { get; set; }
+    public PartRequest? Request { get; set; }
 
     public EntryMode EntryMode => Mode switch { "in" => EntryMode.In, "loan" => EntryMode.Loan, _ => EntryMode.Issue };
     public bool IsOut => EntryMode != EntryMode.In;
@@ -44,11 +48,24 @@ public class EntryModel : PageModel
         }));
     }
 
+    private async Task LoadRequestAsync()
+    {
+        if (RequestId.HasValue)
+            Request = await _db.PartRequests.AsNoTracking().Include(r => r.Lines).FirstOrDefaultAsync(r => r.Id == RequestId);
+    }
+
     public async Task OnGetAsync(int? partId)
     {
         Header.Date = DateTime.Now;
         var lines = new List<EntryLine>();
         if (partId.HasValue) lines.Add(new EntryLine { PartId = partId.Value, Qty = 1 });
+        await LoadRequestAsync();
+        if (Request != null && EntryMode == EntryMode.Issue)
+        {
+            // Isi otomatis dari permintaan: PIC = peminta, line, referensi = no. permintaan.
+            Header.Pic = Request.RequesterName; Header.Department = Request.Line; Header.Reference = Request.ReqNo; Header.Notes = Request.Notes;
+            lines.AddRange(Request.Lines.Where(l => l.PartId.HasValue).Select(l => new EntryLine { PartId = l.PartId!.Value, Qty = l.Qty }));
+        }
         await LoadAsync(lines);
     }
 
@@ -59,8 +76,15 @@ public class EntryModel : PageModel
         if (!result.Ok)
         {
             ModelState.AddModelError("", result.Message);
+            await LoadRequestAsync();
             await LoadAsync(Lines);
             return Page();
+        }
+        if (RequestId.HasValue && EntryMode == EntryMode.Issue)
+        {
+            await HttpContext.RequestServices.GetRequiredService<RequestService>().MarkIssuedAsync(RequestId.Value, result.Message, User.Identity?.Name);
+            TempData["Ok"] = $"Issued tersimpan — No. dokumen {result.Message}. Permintaan ditandai selesai.";
+            return Redirect("/Requests");
         }
         var what = EntryMode switch { EntryMode.In => "Input", EntryMode.Loan => "Loan", _ => "Issued" };
         TempData["Ok"] = $"{what} tersimpan — No. dokumen {result.Message} ({Lines.Count(l => l.PartId > 0)} item).";

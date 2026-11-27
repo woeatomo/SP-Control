@@ -10,7 +10,20 @@
     </div>
 </div>
 
+@if (Model.Request != null)
+{
+    var free = Model.Request.Lines.Where(l => !l.PartId.HasValue).ToList();
+    <div class="alert alert-info py-2">
+        Dari permintaan <b class="font-monospace">@Model.Request.ReqNo</b> — @Model.Request.RequesterName@(Model.Request.Line != null ? " · " + Model.Request.Line : "").
+        Setelah disimpan, permintaan otomatis ditandai <b>Selesai</b>.
+        @if (free.Count > 0)
+        {
+            <div class="mt-1"><b>Belum dipilih part-nya:</b> @foreach (var l in free) { <span class="badge bg-light text-dark border me-1">“@l.FreeText” × @StockService.Fmt(l.Qty)</span> } — cari lewat kotak scan di bawah.</div>
+        }
+    </div>
+}
 <form method="post" id="entryForm">
+    @if (Model.RequestId.HasValue) { <input type="hidden" name="request" value="@Model.RequestId" /> }
     <div asp-validation-summary="All" class="alert alert-danger py-2" style="@(ViewData.ModelState.IsValid ? "display:none" : "")"></div>
     <div class="row g-3">
         <div class="col-lg-4">
