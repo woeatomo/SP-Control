@@ -2,204 +2,353 @@
 @model IndexModel
 @{
     ViewData["Title"] = "Dashboard";
-    var overdue = Model.OpenLoans.Count(l => l.IsOverdue);
-}
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-    <h1 class="page-title me-auto">Dashboard <partial name="_SiteTitle" /></h1>
-    @if (User.IsInRole("Admin") && SiteCtx.Allowed.Count > 0)
+    var isAdmin = User.IsInRole("Admin") && SiteCtx.Allowed.Count > 0;
+    var lc = Model.LevelCounts;
+    int L(StockLevel l) => lc.TryGetValue(l, out var n) ? n : 0;
+    var nEmpty = L(StockLevel.Empty); var nLow = L(StockLevel.Low); var nCrit = L(StockLevel.Critical);
+    var restock = nEmpty + nLow + nCrit;
+    var totalParts = Math.Max(1, Model.TotalParts);
+    var activePct = Model.TotalValue > 0 ? (double)(Model.ActiveValue / Model.TotalValue * 100) : 0;
+    var delta = Model.IssuedLastMonth > 0 ? (double)((Model.IssuedThisMonth - Model.IssuedLastMonth) / Model.IssuedLastMonth * 100) : (double?)null;
+    var name = User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? User.Identity?.Name;
+    var hour = DateTime.Now.Hour;
+    var greet = hour < 11 ? "Selamat pagi" : hour < 15 ? "Selamat siang" : hour < 18 ? "Selamat sore" : "Selamat malam";
+    var culture = new System.Globalization.CultureInfo("id-ID");
+    var levels = new[]
     {
-        <a class="btn btn-primary btn-sm" href="/Entry/issue">+ Issued</a>
-        <a class="btn btn-outline-primary btn-sm" href="/Entry/in">+ Input</a>
-        <a class="btn btn-outline-primary btn-sm" href="/Entry/loan">+ Loan</a>
-    }
-</div>
-
-@* ---- Notifikasi ---- *@
-@{
-    var nEmpty = Model.Count(StockLevel.Empty); var nLow = Model.Count(StockLevel.Low); var nCrit = Model.Count(StockLevel.Critical);
-    string Codes(StockLevel l) { var x = Model.Alerts.Where(p => p.Level == l).Select(p => p.PartNumber).ToList(); return string.Join(", ", x.Take(6)) + (x.Count > 6 ? ", …" : ""); }
+        (StockLevel.Empty, "EMPTY", "Stok habis", "sv-empty", "empty"),
+        (StockLevel.Low, "LOW", "Di bawah min", "sv-low", "low"),
+        (StockLevel.Critical, "CRITICAL", "Sama dengan min", "sv-critical", "critical"),
+        (StockLevel.Normal, "NORMAL", "Aman", "sv-normal", "normal"),
+        (StockLevel.Overstock, "OVERSTOCK", "Di atas max", "sv-over", "over"),
+    };
+    string Money(decimal v) => "$" + (v >= 100000 ? (v / 1000).ToString("N0") + "k" : v.ToString(v >= 1000 ? "N0" : "N2"));
 }
-@if (nEmpty > 0)
-{
-    <div class="alert alert-danger d-flex align-items-center py-2 mb-2">
-        <div><b>⛔ @nEmpty part EMPTY (stok habis).</b> @Codes(StockLevel.Empty)</div>
-        <a class="btn btn-sm btn-danger ms-auto nowrap" href="/Parts?fStock=empty">Lihat</a>
-    </div>
-}
-@if (nLow > 0)
-{
-    <div class="alert alert-warning d-flex align-items-center py-2 mb-2 alert-low">
-        <div><b>⚠ @nLow part LOW (di bawah min).</b> @Codes(StockLevel.Low)</div>
-        <a class="btn btn-sm btn-warning ms-auto nowrap" href="/Parts?fStock=low">Lihat</a>
-    </div>
-}
-@if (nCrit > 0)
-{
-    <div class="alert alert-warning d-flex align-items-center py-2 mb-2">
-        <div><b>⚠ @nCrit part CRITICAL (sama dengan min).</b> @Codes(StockLevel.Critical)</div>
-        <a class="btn btn-sm btn-warning ms-auto nowrap" href="/Parts?fStock=critical">Lihat</a>
-    </div>
-}
-@if (overdue > 0)
-{
-    <div class="alert alert-warning d-flex align-items-center py-2 mb-2">
-        <div><b>⏰ @overdue loan melewati rencana tanggal kembali.</b></div>
-        <a class="btn btn-sm btn-warning ms-auto nowrap" asp-page="/Loans/Index">Lihat</a>
-    </div>
-}
-@if (SiteCtx.IsAll)
-{
-    var missing = Model.SiteRows.Where(r => r.Check == null).Select(r => r.Site.Code).ToList();
-    if (missing.Count > 0)
+@functions {
+    /// <summary>Sparkline SVG sederhana (garis 2px, titik di nilai terakhir).</summary>
+    static string Spark(IList<decimal> v, int w = 120, int h = 34)
     {
-        <div class="alert alert-info py-2 mb-2"><b>📋 Stock checking periode @Model.CurYear-S@(Model.CurSemester) belum dibuat di @missing.Count site:</b> @string.Join(", ", missing)</div>
+        if (v.Count < 2) return "";
+        var max = v.Max(); if (max <= 0) max = 1;
+        var step = (w - 6) / (double)(v.Count - 1);
+        var pts = v.Select((x, i) => (X: 3 + i * step, Y: h - 4 - (double)(x / max) * (h - 8))).ToList();
+        var line = string.Join(" ", pts.Select(p => FormattableString.Invariant($"{p.X:0.#},{p.Y:0.#}")));
+        var last = pts[^1];
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        return string.Create(inv, $"<svg class=\"spark\" viewBox=\"0 0 {w} {h}\" width=\"{w}\" height=\"{h}\" aria-hidden=\"true\">")
+            + string.Create(inv, $"<polygon points=\"3,{h - 2} {line} {last.X:0.#},{h - 2}\" class=\"spark-area\"/>")
+            + string.Create(inv, $"<polyline points=\"{line}\" class=\"spark-line\"/><circle cx=\"{last.X:0.#}\" cy=\"{last.Y:0.#}\" r=\"3.5\" class=\"spark-dot\"/></svg>");
     }
 }
-else if (Model.CurrentCheck == null)
-{
-    <div class="alert alert-info d-flex align-items-center py-2 mb-2">
-        <div><b>📋 Stock checking periode @Model.CurYear-S@(Model.CurSemester) belum dibuat.</b>
-            @(Model.LastClosedCheck != null ? $"Terakhir: {Model.LastClosedCheck.Period}, ditutup {Model.LastClosedCheck.ClosedAt:dd MMM yyyy}." : "Belum pernah ada stock checking.")</div>
-        <a class="btn btn-sm btn-info ms-auto nowrap" asp-page="/StockChecks/Index">Mulai</a>
-    </div>
-}
-else if (Model.CurrentCheck.Status == StockCheckStatus.Open)
-{
-    <div class="alert alert-info d-flex align-items-center py-2 mb-2">
-        <div><b>📋 Stock checking @Model.CurrentCheck.Period sedang berjalan:</b> @Model.CheckProgress.Counted dari @Model.CheckProgress.Total item sudah dihitung.</div>
-        <a class="btn btn-sm btn-info ms-auto nowrap" asp-page="/StockChecks/Details" asp-route-id="@Model.CurrentCheck.Id">Lanjutkan</a>
-    </div>
-}
 
-@if (SiteCtx.IsAll && Model.SiteRows.Count > 0)
-{
-    <div class="card mt-3">
-        <div class="card-header bg-white fw-semibold">Ringkasan per Site</div>
-        <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
-                <thead><tr><th>Site</th><th class="num">Item</th><th class="num">Value ACTIVE (USD)</th><th class="num">Value INACTIVE (USD)</th><th class="num">Perlu Restock</th><th class="num">Overstock</th><th>Stock Checking @Model.CurYear-S@(Model.CurSemester)</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var r in Model.SiteRows)
+<div class="dash">
+    @* ---------- Header ---------- *@
+    <div class="dash-head">
+        <div>
+            <div class="dash-date">@DateTime.Now.ToString("dddd, d MMMM yyyy", culture)@if (SiteCtx.MultiSiteSystem) { <span> · @(SiteCtx.Current == null ? "Semua site" : SiteCtx.Current.Code + " — " + SiteCtx.Current.Name)</span> }</div>
+            <h1 class="dash-title">@greet, @name</h1>
+        </div>
+        @if (isAdmin)
+        {
+            <div class="dash-actions">
+                <a class="btn btn-primary" href="/Entry/issue"><span aria-hidden="true">↗</span> Issued</a>
+                <a class="btn btn-light" href="/Entry/in"><span aria-hidden="true">↘</span> Input</a>
+                <a class="btn btn-light" href="/Entry/loan"><span aria-hidden="true">⇄</span> Loan</a>
+                <a class="btn btn-light" href="/Parts/Labels"><span aria-hidden="true">▦</span> Label QR</a>
+            </div>
+        }
+    </div>
+
+    @* ---------- Perlu perhatian: satu baris ringkas ---------- *@
+    <div class="attn">
+        <span class="attn-title">Perlu perhatian</span>
+        @if (nEmpty > 0) { <a class="chip chip-empty" href="/Parts?fStock=empty"><b>@nEmpty</b> stok habis</a> }
+        @if (nLow > 0) { <a class="chip chip-low" href="/Parts?fStock=low"><b>@nLow</b> LOW</a> }
+        @if (nCrit > 0) { <a class="chip chip-critical" href="/Parts?fStock=critical"><b>@nCrit</b> CRITICAL</a> }
+        @if (Model.OverdueLoans > 0) { <a class="chip chip-low" href="/Loans"><b>@Model.OverdueLoans</b> loan terlambat</a> }
+        @if (SiteCtx.IsAll)
+        {
+            var missing = Model.SiteRows.Where(r => r.Check == null).Select(r => r.Site.Code).ToList();
+            if (missing.Count > 0) { <a class="chip chip-info" href="/StockChecks">Stock checking @Model.CurYear-S@(Model.CurSemester) belum di <b>@string.Join(", ", missing)</b></a> }
+        }
+        else if (Model.CurrentCheck == null)
+        {
+            <a class="chip chip-info" href="/StockChecks">Stock checking @Model.CurYear-S@(Model.CurSemester) belum dibuat</a>
+        }
+        else if (Model.CurrentCheck.Status == StockCheckStatus.Open)
+        {
+            <a class="chip chip-info" href="/StockChecks/Details/@Model.CurrentCheck.Id">Stock checking berjalan <b>@Model.CheckProgress.Counted/@Model.CheckProgress.Total</b></a>
+        }
+        @if (restock == 0 && Model.OverdueLoans == 0) { <span class="chip chip-ok">✓ Semua stok di atas minimum</span> }
+    </div>
+
+    @* ---------- KPI ---------- *@
+    <div class="row g-3">
+        <div class="col-6 col-xl-3">
+            <div class="kpi">
+                <div class="kpi-label">Nilai stok</div>
+                <div class="kpi-value">@Money(Model.TotalValue) <span class="kpi-unit">USD</span></div>
+                <div class="split" role="img" aria-label="Active @activePct.ToString("0")%, inactive @((100 - activePct).ToString("0"))%">
+                    <span class="split-a" style="width:@activePct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></span><span class="split-i"></span>
+                </div>
+                <div class="kpi-sub"><span class="dot dot-a"></span>Active @Money(Model.ActiveValue) <span class="dot dot-i ms-2"></span>Inactive @Money(Model.NonActiveValue)</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <a class="kpi kpi-link" href="/Parts">
+                <div class="kpi-label">Item spare part</div>
+                <div class="kpi-value">@Model.TotalParts.ToString("N0")</div>
+                <div class="kpi-sub">@Model.ActiveParts active · @Model.NonActiveParts inactive</div>
+                <div class="kpi-sub">@L(StockLevel.Overstock) overstock · @Model.OpenLoans.Count sedang dipinjam</div>
+            </a>
+        </div>
+        <div class="col-6 col-xl-3">
+            <a class="kpi kpi-link @(restock > 0 ? "kpi-warn" : "")" href="/Parts?fStock=alert">
+                <div class="kpi-label">Perlu restock</div>
+                <div class="kpi-value">@restock <span class="kpi-unit">part</span></div>
+                @if (restock > 0)
+                {
+                    <div class="seg" role="img" aria-label="@nEmpty empty, @nLow low, @nCrit critical">
+                        @if (nEmpty > 0) { <span class="lv-empty" style="flex:@nEmpty"></span> }
+                        @if (nLow > 0) { <span class="lv-low" style="flex:@nLow"></span> }
+                        @if (nCrit > 0) { <span class="lv-critical" style="flex:@nCrit"></span> }
+                    </div>
+                    <div class="kpi-sub">@nEmpty empty · @nLow low · @nCrit critical</div>
+                    <div class="kpi-sub">Estimasi order @Money(Model.RestockCost)</div>
+                }
+                else { <div class="kpi-sub mt-2">Tidak ada part di bawah minimum.</div> }
+            </a>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="kpi">
+                <div class="kpi-label">Pemakaian bulan ini</div>
+                <div class="d-flex align-items-end justify-content-between gap-2">
+                    <div class="kpi-value">@Money(Model.IssuedThisMonth)</div>
+                    @Html.Raw(Spark(Model.Monthly.Select(m => m.Value).ToList()))
+                </div>
+                <div class="kpi-sub">
+                    @if (delta.HasValue)
                     {
-                        <tr>
-                            <td><span class="site-tag">@r.Site.Code</span> @r.Site.Name</td>
-                            <td class="num">@r.Parts.ToString("N0")</td>
-                            <td class="num">@r.ActiveValue.ToString("N2")</td>
-                            <td class="num">@r.InactiveValue.ToString("N2")</td>
-                            <td class="num">@if (r.Restock > 0) { <b class="text-danger">@r.Restock</b> } else { <span>0</span> }</td>
-                            <td class="num">@r.Overstock</td>
-                            <td>@(r.Check == null ? "belum dibuat" : r.Check.Status == StockCheckStatus.Open ? "berjalan" : "selesai")</td>
-                            <td><a class="btn btn-sm btn-outline-primary py-0" href="/site/switch?id=@r.Site.Id&returnUrl=%2F">Buka</a></td>
-                        </tr>
+                        <span class="delta @(delta >= 0 ? "up" : "down")">@(delta >= 0 ? "▲" : "▼") @Math.Abs(delta.Value).ToString("0")%</span> <span>vs bulan lalu (@Money(Model.IssuedLastMonth))</span>
                     }
-                </tbody>
-                <tfoot><tr class="fw-semibold table-light"><td>TOTAL</td><td class="num">@Model.SiteRows.Sum(r => r.Parts).ToString("N0")</td><td class="num">@Model.SiteRows.Sum(r => r.ActiveValue).ToString("N2")</td><td class="num">@Model.SiteRows.Sum(r => r.InactiveValue).ToString("N2")</td><td class="num">@Model.SiteRows.Sum(r => r.Restock)</td><td class="num">@Model.SiteRows.Sum(r => r.Overstock)</td><td colspan="2"></td></tr></tfoot>
-            </table>
+                    else { <span>@Model.MonthlyCount[^1] transaksi issued</span> }
+                </div>
+            </div>
         </div>
     </div>
-}
 
-<div class="row g-3 mt-0 mb-3">
-    <div class="col-6 col-lg-2"><div class="card stat h-100"><div class="label">Total Item</div><div class="value">@Model.TotalParts.ToString("N0")</div><div class="sub">@Model.ActiveParts active · @Model.NonActiveParts inactive</div></div></div>
-    <div class="col-6 col-lg-2"><div class="card stat h-100"><div class="label">Stock Value ACTIVE</div><div class="value">$@Model.ActiveValue.ToString("N0")</div><div class="sub">USD</div></div></div>
-    <div class="col-6 col-lg-2"><div class="card stat h-100"><div class="label">Stock Value INACTIVE</div><div class="value">$@Model.NonActiveValue.ToString("N0")</div><div class="sub">USD</div></div></div>
-    <div class="col-6 col-lg-2"><a class="card stat h-100 text-decoration-none text-reset" href="/Parts?fStock=alert"><div class="label">⚠ Perlu Restock</div><div class="value">@Model.Alerts.Count</div><div class="sub">@nEmpty empty · @nLow low · @nCrit critical</div></a></div>
-    <div class="col-6 col-lg-2"><a class="card stat h-100 text-decoration-none text-reset" href="/Parts?fStock=over"><div class="label">Overstock</div><div class="value">@Model.OverstockCount</div><div class="sub">di atas max stock</div></a></div>
-    <div class="col-6 col-lg-2"><a class="card stat h-100 text-decoration-none text-reset" asp-page="/Loans/Index"><div class="label">Loan Belum Kembali</div><div class="value">@Model.OpenLoans.Count</div><div class="sub">@overdue terlambat</div></a></div>
-</div>
-
-<div class="row g-3">
-    <div class="col-lg-6">
-        <div class="card h-100">
-            <div class="card-header bg-white fw-semibold">Perlu Restock <span class="text-muted fw-normal small">· EMPTY, LOW &amp; CRITICAL — semua part (active &amp; inactive)</span></div>
-            <div class="table-responsive" style="max-height:330px">
-                <table class="table table-sm mb-0">
-                    <thead><tr><th>Part</th><th>rackName</th><th class="num">now</th><th class="num">min</th><th class="num">max</th><th class="num" title="Max − now">Saran order</th><th>Status</th></tr></thead>
+    @* ---------- Ringkasan per site (mode Semua site) ---------- *@
+    @if (SiteCtx.IsAll && Model.SiteRows.Count > 0)
+    {
+        <div class="panel mt-3">
+            <div class="panel-head"><h2>Ringkasan per site</h2></div>
+            <div class="table-responsive">
+                <table class="table table-sm table-borderless dash-table mb-0">
+                    <thead><tr><th>Site</th><th class="num">Item</th><th class="num">Nilai stok (USD)</th><th class="num">Perlu restock</th><th>Stock checking</th><th></th></tr></thead>
                     <tbody>
-                        @foreach (var p in Model.Alerts)
+                        @foreach (var r in Model.SiteRows)
                         {
                             <tr>
-                                <td>@if (SiteCtx.IsAll) { <span class="site-tag">@SiteCtx.CodeOf(p.SiteId)</span> } <a asp-page="/Parts/Details" asp-route-id="@p.Id">@p.PartNumber</a><div class="small text-muted">@p.Name · @p.Supplier</div></td>
-                                <td class="nowrap small">@p.Location</td>
-                                <td class="num"><b>@StockService.Fmt(p.StockQty)</b></td>
-                                <td class="num">@StockService.Fmt(p.MinStock)</td>
-                                <td class="num">@StockService.Fmt(p.MaxStock)</td>
-                                <td class="num">@StockService.Fmt(p.SuggestedOrder)</td>
-                                <td><partial name="_LevelBadge" model="p.Level" /></td>
+                                <td><span class="site-tag">@r.Site.Code</span> @r.Site.Name</td>
+                                <td class="num">@r.Parts.ToString("N0")</td>
+                                <td class="num">@((r.ActiveValue + r.InactiveValue).ToString("N2"))</td>
+                                <td class="num">@if (r.Restock > 0) { <b class="text-danger">@r.Restock</b> } else { <span class="text-muted">0</span> }</td>
+                                <td>@(r.Check == null ? "belum dibuat" : r.Check.Status == StockCheckStatus.Open ? "berjalan" : "selesai")</td>
+                                <td class="text-end"><a class="link-arrow" href="/site/switch?id=@r.Site.Id&returnUrl=%2F">Buka →</a></td>
                             </tr>
                         }
-                        @if (Model.Alerts.Count == 0) { <tr><td colspan="7" class="text-center text-muted py-4">✓ Tidak ada part EMPTY / LOW / CRITICAL.</td></tr> }
                     </tbody>
                 </table>
             </div>
         </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card h-100">
-            <div class="card-header bg-white fw-semibold">Nilai Pemakaian (Issued) per Bulan, USD <span class="text-muted fw-normal small">· bulan ini $@Model.IssuedThisMonth.ToString("N2")</span></div>
-            <div class="card-body">
-                <div style="height:240px"><canvas id="chart" aria-label="Grafik nilai pemakaian per bulan"></canvas></div>
-                <details class="small mt-2"><summary class="text-muted">Lihat sebagai tabel</summary>
-                    <table class="table table-sm mb-0 w-auto">
-                        @foreach (var m in Model.Monthly) { <tr><td>@m.Label</td><td class="num">@m.Value.ToString("N2")</td></tr> }
+    }
+
+    @* ---------- Tren pemakaian + kondisi stok ---------- *@
+    <div class="row g-3 mt-0">
+        <div class="col-lg-8">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <h2>Nilai pemakaian per bulan</h2>
+                    <span class="panel-note">USD · 6 bulan terakhir</span>
+                </div>
+                <div class="chart-box"><canvas id="usageChart" aria-label="Grafik nilai pemakaian per bulan"></canvas></div>
+                <details class="small mt-1"><summary class="text-muted">Lihat sebagai tabel</summary>
+                    <table class="table table-sm w-auto mb-0 mt-1">
+                        <tr><th>Bulan</th><th class="num">Nilai (USD)</th><th class="num">Transaksi</th></tr>
+                        @for (var i = 0; i < Model.Monthly.Count; i++) { <tr><td>@Model.Monthly[i].Label</td><td class="num">@Model.Monthly[i].Value.ToString("N2")</td><td class="num">@Model.MonthlyCount[i]</td></tr> }
                     </table>
                 </details>
             </div>
         </div>
+        <div class="col-lg-4">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <h2>Kondisi stok</h2>
+                    <span class="panel-note">@Model.TotalParts part</span>
+                </div>
+                <div class="seg seg-lg" role="img" aria-label="Komposisi status stok">
+                    @foreach (var (lvl, label, _, cls, _) in levels)
+                    {
+                        if (L(lvl) > 0) { <span class="@cls" style="flex:@L(lvl)" title="@label: @L(lvl) part"></span> }
+                    }
+                </div>
+                <ul class="lv-list">
+                    @foreach (var (lvl, label, desc, cls, key) in levels)
+                    {
+                        <li>
+                            <a href="/Parts?fStock=@key">
+                                <span class="sw @cls"></span>
+                                <span class="lv-name">@label</span>
+                                <span class="lv-desc">@desc</span>
+                                <span class="lv-n">@L(lvl)</span>
+                                <span class="lv-pct">@((L(lvl) * 100.0 / totalParts).ToString("0"))%</span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
     </div>
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-white fw-semibold d-flex">Transaksi Terakhir <a class="ms-auto small fw-normal" asp-page="/Transactions/Index">Semua riwayat →</a></div>
-            <div class="table-responsive">
-                <table class="table table-sm mb-0">
-                    <thead><tr><th>Tanggal</th><th>Tipe</th><th>No. Dokumen</th><th>Part</th><th class="num">Qty</th><th>PIC</th><th>Mesin / Dept</th></tr></thead>
-                    <tbody>
-                        @foreach (var t in Model.Recent)
+
+    @* ---------- Restock + aktivitas ---------- *@
+    <div class="row g-3 mt-0">
+        <div class="col-lg-7">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <h2>Perlu restock</h2>
+                    @if (Model.Alerts.Count > 0) { <a class="link-arrow" href="/Reports?Type=lowstock">Report &amp; saran order →</a> }
+                </div>
+                @if (Model.Alerts.Count == 0)
+                {
+                    <div class="empty-state">✓ Tidak ada part EMPTY, LOW atau CRITICAL.</div>
+                }
+                else
+                {
+                    <ul class="restock">
+                        @foreach (var p in Model.Alerts.Take(6))
                         {
-                            <tr>
-                                <td class="nowrap">@t.Date.ToString("dd MMM yyyy HH:mm")</td>
-                                <td><partial name="_TxBadge" model="t.Type" /></td>
-                                <td class="nowrap">@t.DocNo</td>
-                                <td>@if (SiteCtx.IsAll) { <span class="site-tag">@SiteCtx.CodeOf(t.SiteId)</span> } <a asp-page="/Parts/Details" asp-route-id="@t.PartId">@t.Part.PartNumber</a> <span class="small text-muted">@t.Part.Name</span></td>
-                                <td class="num @(t.Qty < 0 ? "text-danger" : "text-success")">@(t.Qty > 0 ? "+" : "")@StockService.Fmt(t.Qty) <span class="small text-muted">@t.Part.Unit</span></td>
-                                <td>@t.Pic</td>
-                                <td>@t.Department</td>
-                            </tr>
+                            var cap = p.MaxStock > 0 ? p.MaxStock : Math.Max(p.MinStock * 2, 1);
+                            var fill = Math.Min(100, (double)(p.StockQty / cap * 100));
+                            var minPos = Math.Min(100, (double)(p.MinStock / cap * 100));
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            <li>
+                                <partial name="_LevelBadge" model="p.Level" />
+                                <a class="rs-part part-pop" href="/Parts/Details/@p.Id" data-id="@p.Id">
+                                    <span class="rs-code">@if (SiteCtx.IsAll) { <span class="site-tag">@SiteCtx.CodeOf(p.SiteId)</span> } @p.PartNumber</span>
+                                    <span class="rs-name">@p.Name@(string.IsNullOrWhiteSpace(p.Location) ? "" : " · " + p.Location)</span>
+                                </a>
+                                <div class="rs-gauge" title="Stok @StockService.Fmt(p.StockQty) · min @StockService.Fmt(p.MinStock) · max @StockService.Fmt(p.MaxStock)">
+                                    <div class="gauge"><span class="gauge-fill @(p.Level == StockLevel.Critical ? "lv-critical" : p.Level == StockLevel.Low ? "lv-low" : "lv-empty")" style="width:@fill.ToString("0.#", inv)%"></span><i style="left:@minPos.ToString("0.#", inv)%"></i></div>
+                                    <span class="rs-qty"><b>@StockService.Fmt(p.StockQty)</b> / min @StockService.Fmt(p.MinStock)</span>
+                                </div>
+                                <span class="rs-order" title="Saran order (sampai max)">+@StockService.Fmt(p.SuggestedOrder)</span>
+                            </li>
                         }
-                        @if (Model.Recent.Count == 0) { <tr><td colspan="7" class="text-center text-muted py-4">Belum ada transaksi.</td></tr> }
-                    </tbody>
-                </table>
+                    </ul>
+                    @if (Model.Alerts.Count > 6) { <a class="link-arrow d-inline-block mt-2" href="/Parts?fStock=alert">Lihat semua @Model.Alerts.Count part →</a> }
+                }
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <ul class="nav nav-pills dash-tabs" role="tablist">
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tabRecent" type="button" role="tab">Aktivitas terbaru</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabTop" type="button" role="tab">Paling banyak dipakai</button></li>
+                    </ul>
+                </div>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tabRecent" role="tabpanel">
+                        @if (Model.Recent.Count == 0) { <div class="empty-state">Belum ada transaksi.</div> }
+                        <ul class="feed">
+                            @foreach (var t in Model.Recent)
+                            {
+                                var (ico, cls) = t.Type switch
+                                {
+                                    TxType.Issue => ("↗", "f-issue"), TxType.In => ("↘", "f-in"), TxType.LoanOut => ("⇄", "f-loan"),
+                                    TxType.LoanReturn => ("↩", "f-in"), _ => ("±", "f-adj")
+                                };
+                                <li>
+                                    <span class="f-ico @cls" aria-hidden="true">@ico</span>
+                                    <div class="f-body">
+                                        <div class="f-line"><a class="part-pop" href="/Parts/Details/@t.PartId" data-id="@t.PartId">@t.Part.PartNumber</a>
+                                            <span class="f-qty @(t.Qty < 0 ? "neg" : "pos")">@(t.Qty > 0 ? "+" : "")@StockService.Fmt(t.Qty) @t.Part.Unit</span></div>
+                                        <div class="f-meta">@(t.Type switch { TxType.Issue => "Issued", TxType.In => "Input", TxType.LoanOut => "Loan", TxType.LoanReturn => "Loan kembali", _ => "Adjustment" })@(string.IsNullOrWhiteSpace(t.Pic) ? "" : " · " + t.Pic)@(SiteCtx.IsAll ? " · " + SiteCtx.CodeOf(t.SiteId) : "") · @IndexModel.Ago(t.Date)</div>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                        @if (Model.Recent.Count > 0) { <a class="link-arrow" href="/Transactions">Semua riwayat →</a> }
+                    </div>
+                    <div class="tab-pane fade" id="tabTop" role="tabpanel">
+                        @if (Model.TopUsed.Count == 0) { <div class="empty-state">Belum ada pemakaian dalam 30 hari terakhir.</div> }
+                        else
+                        {
+                            var topMax = Math.Max(Model.TopUsed.Max(r => r.Value), 0.01m);
+                            <div class="small text-muted mb-2">30 hari terakhir, berdasarkan nilai (USD)</div>
+                            <ul class="top">
+                                @foreach (var r in Model.TopUsed)
+                                {
+                                    <li>
+                                        <div class="top-line">
+                                            <a class="part-pop" href="/Parts/Details/@r.PartId" data-id="@r.PartId">@r.Code</a>
+                                            <span class="top-val">@r.Value.ToString("N2")</span>
+                                        </div>
+                                        <div class="top-bar"><span style="width:@((double)(r.Value / topMax * 100)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+                                        <div class="f-meta">@r.Name · @StockService.Fmt(r.Qty) @r.Unit@(SiteCtx.IsAll ? " · " + SiteCtx.CodeOf(r.SiteId) : "")</div>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+<partial name="_PartPopup" />
 
 @section Scripts {
 <script src="~/lib/chartjs/chart.umd.js"></script>
 <script>
-    new Chart(document.getElementById('chart'), {
+(function () {
+    const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Monthly.Select(m => m.Label)));
+    const values = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Monthly.Select(m => Math.Round(m.Value, 2))));
+    const counts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.MonthlyCount));
+    const money = v => '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    new Chart(document.getElementById('usageChart'), {
         type: 'bar',
         data: {
-            labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Monthly.Select(m => m.Label))),
+            labels,
             datasets: [{
-                label: 'Nilai Issued (USD)',
-                data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Monthly.Select(m => Math.Round(m.Value, 2)))),
-                backgroundColor: '#2a78d6', hoverBackgroundColor: '#1c5cab',
-                borderRadius: { topLeft: 4, topRight: 4 }, maxBarThickness: 44
+                label: 'Nilai issued (USD)', data: values,
+                // Bulan berjalan ditonjolkan; bulan sebelumnya satu hue lebih terang.
+                backgroundColor: values.map((_, i) => i === values.length - 1 ? '#2a78d6' : '#86b6ef'),
+                hoverBackgroundColor: values.map((_, i) => i === values.length - 1 ? '#1c5cab' : '#5598e7'),
+                borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', maxBarThickness: 40, minBarLength: 2
             }]
         },
         options: {
             maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: false },
-                tooltip: { callbacks: { label: c => ' $' + c.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2 }) } }
+                tooltip: {
+                    backgroundColor: '#1f2a37', padding: 10, cornerRadius: 8, displayColors: false,
+                    callbacks: { label: c => money(c.parsed.y), afterLabel: c => counts[c.dataIndex] + ' transaksi' }
+                }
             },
             scales: {
-                x: { grid: { display: false }, ticks: { color: '#52514e' } },
-                y: { beginAtZero: true, border: { display: false }, grid: { color: '#e9ebee' },
-                     ticks: { color: '#52514e', maxTicksLimit: 5, callback: v => '$' + v.toLocaleString('en-US') } }
+                x: { grid: { display: false }, border: { color: '#e3e6ea' }, ticks: { color: '#5b6573' } },
+                y: { beginAtZero: true, border: { display: false }, grid: { color: '#eef0f3' },
+                     ticks: { color: '#5b6573', maxTicksLimit: 4, callback: v => '$' + Number(v).toLocaleString('en-US') } }
             }
         }
     });
+    document.querySelectorAll('.dash .part-pop').forEach(a => a.addEventListener('click', e => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+        e.preventDefault(); SP.showPart(a.dataset.id);
+    }));
+})();
 </script>
 }
