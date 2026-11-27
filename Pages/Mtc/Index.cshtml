@@ -1,0 +1,159 @@
+@page
+@model SparePartControl.Pages.Mtc.IndexModel
+@{
+    ViewData["Title"] = "Maintenance";
+    var culture = new System.Globalization.CultureInfo("id-ID");
+    var name = User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? User.Identity?.Name;
+    var plansDone = Model.Plans.Count(p => SparePartControl.Pages.Mtc.IndexModel.PlanState(p) == "done");
+    var pmDone = Model.Pm.Count(p => p.DoneDate.HasValue);
+    var pmTotal = Model.Pm.Count;
+    var pmPct = pmTotal == 0 ? 0 : pmDone * 100.0 / pmTotal;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var monthName = DateTime.Today.ToString("MMMM yyyy", culture);
+}
+<div class="dash mtc">
+    <div class="dash-head">
+        <div>
+            <div class="dash-date">@DateTime.Now.ToString("dddd, d MMMM yyyy", culture) · Sekarang @(Model.Now.Shift == Shift.A ? "Shift A" : "Shift B")@if (SiteCtx.MultiSiteSystem) { <span> · @(SiteCtx.Current?.Name ?? "Semua site")</span> }</div>
+            <h1 class="dash-title">Machine Maintenance</h1>
+        </div>
+        <div class="dash-actions">
+            @if (Model.CanEdit)
+            {
+                <a class="btn btn-primary" href="/Mtc/Activity">+ Isi aktivitas</a>
+                <a class="btn btn-light" href="/Mtc/Plan">+ Tambah plan</a>
+            }
+            <a class="btn btn-light" href="/Mtc/Report">Laporan kemarin</a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-6 col-xl-3">
+            <a class="kpi kpi-link" href="/Mtc/Plan">
+                <div class="kpi-label">Daily plan hari ini</div>
+                <div class="kpi-value">@plansDone<span class="kpi-unit"> / @Model.Plans.Count selesai</span></div>
+                <div class="split"><span class="split-a" style="width:@((Model.Plans.Count == 0 ? 0 : plansDone * 100.0 / Model.Plans.Count).ToString("0.#", inv))%"></span><span class="split-i"></span></div>
+                <div class="kpi-sub">@(Model.Plans.Count - plansDone) pekerjaan belum selesai</div>
+            </a>
+        </div>
+        <div class="col-6 col-xl-3">
+            <a class="kpi kpi-link" href="#pm">
+                <div class="kpi-label">PM @monthName</div>
+                <div class="kpi-value">@pmPct.ToString("0")<span class="kpi-unit">%</span></div>
+                <div class="split"><span class="split-a pm" style="width:@pmPct.ToString("0.#", inv)%"></span><span class="split-i"></span></div>
+                <div class="kpi-sub">@pmDone dari @pmTotal mesin sudah PM</div>
+            </a>
+        </div>
+        <div class="col-6 col-xl-3">
+            <a class="kpi kpi-link" href="/Mtc/Report?date=@DateTime.Today.ToString("yyyy-MM-dd")">
+                <div class="kpi-label">Aktivitas hari ini</div>
+                <div class="kpi-value">@Model.TodayCount</div>
+                <div class="kpi-sub">@Model.TodayBreakdown breakdown · downtime @((int)Model.TodayDowntime) menit</div>
+            </a>
+        </div>
+        <div class="col-6 col-xl-3">
+            <a class="kpi kpi-link @(Model.UnlinkedReports > 0 ? "kpi-warn" : "")" href="/Mtc/Report?OnlyParts=true">
+                <div class="kpi-label">Pergantian part bulan ini</div>
+                <div class="kpi-value">@Model.PartsThisMonth<span class="kpi-unit"> part</span></div>
+                <div class="kpi-sub">tertaut ke transaksi sparepart</div>
+                @if (Model.UnlinkedReports > 0) { <div class="kpi-sub text-danger">⚠ @Model.UnlinkedReports laporan belum ditautkan</div> }
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-0">
+        <div class="col-xl-7">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <h2>Daily plan hari ini</h2>
+                    <a class="link-arrow" href="/Mtc/Plan">Kelola plan →</a>
+                </div>
+                @if (Model.Plans.Count == 0)
+                {
+                    <div class="empty-state">Belum ada plan untuk hari ini.@if (Model.CanEdit) { <span> <a href="/Mtc/Plan">Tambah plan</a></span> }</div>
+                }
+                <ul class="plan-list">
+                    @foreach (var p in Model.Plans)
+                    {
+                        var st = SparePartControl.Pages.Mtc.IndexModel.PlanState(p);
+                        <li class="pl-@st">
+                            <span class="pl-check" aria-hidden="true">@(st == "done" ? "✓" : st == "progress" ? "…" : "")</span>
+                            <div class="pl-main">
+                                <div class="pl-title">@(p.Machine?.Code ?? "Umum") <span class="pl-task">@p.Task</span></div>
+                                <div class="pl-meta"><span class="ty-tag @MaintenanceService.TypeCss(p.Type)">@MaintenanceService.TypeText(p.Type)</span>
+                                    @(p.Shift.HasValue ? "Shift " + p.Shift : "Semua shift")@(string.IsNullOrWhiteSpace(p.Pic) ? "" : " · PIC " + p.Pic)@(p.Machine != null ? " · " + p.Machine.Name : "")</div>
+                            </div>
+                            @if (st == "done") { <span class="act-st as-done">Selesai</span> }
+                            else if (Model.CanEdit) { <a class="btn btn-sm @(st == "progress" ? "btn-outline-primary" : "btn-primary")" href="/Mtc/Activity?plan=@p.Id">@(st == "progress" ? "Lanjutkan" : "Kerjakan") →</a> }
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+        <div class="col-xl-5">
+            <div class="panel h-100">
+                <div class="panel-head"><h2>Pekerjaan belum selesai</h2><span class="panel-note">7 hari terakhir</span></div>
+                @if (Model.OpenWork.Count == 0) { <div class="empty-state">✓ Tidak ada pekerjaan yang tertunda.</div> }
+                <ul class="feed">
+                    @foreach (var a in Model.OpenWork)
+                    {
+                        <li>
+                            <span class="f-ico @(a.Status == ActivityStatus.WaitingPart ? "f-loan" : "f-adj")" aria-hidden="true">@(a.Status == ActivityStatus.WaitingPart ? "⏳" : "↻")</span>
+                            <div class="f-body">
+                                <div class="f-line"><a href="/Mtc/Activity?id=@a.Id">@a.MachineLabel</a><span class="act-st as-@a.Status.ToString().ToLowerInvariant()">@MaintenanceService.StatusText(a.Status)</span></div>
+                                <div class="f-meta">@(a.Problem ?? a.Action) · @a.Date.ToString("dd MMM") shift @a.Shift</div>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel mt-3" id="pm">
+        <div class="panel-head">
+            <h2>Status PM mesin · @monthName</h2>
+            <div class="pm-legend"><span class="pm-sw done"></span>Sudah PM <span class="pm-sw plan"></span>Ada plan <span class="pm-sw todo"></span>Belum</div>
+        </div>
+        @if (pmTotal == 0)
+        {
+            <div class="empty-state">Belum ada mesin wajib PM. Atur di <a href="/Mtc/Machines">Master Mesin</a>.</div>
+        }
+        else
+        {
+            <div class="pm-bar" role="img" aria-label="@pmDone dari @pmTotal mesin sudah PM"><span style="width:@pmPct.ToString("0.#", inv)%"></span></div>
+            <div class="pm-bar-text"><b>@pmDone</b> dari @pmTotal mesin sudah PM (@pmPct.ToString("0")%) · @(pmTotal - pmDone) belum</div>
+            @foreach (var g in Model.Pm.GroupBy(x => string.IsNullOrWhiteSpace(x.Machine.Area) ? "Lainnya" : x.Machine.Area))
+            {
+                <div class="pm-area">@g.Key <span>@g.Count(x => x.DoneDate.HasValue)/@g.Count()</span></div>
+                <div class="pm-grid">
+                    @foreach (var m in g)
+                    {
+                        var cls = m.DoneDate.HasValue ? "done" : m.Planned ? "plan" : "todo";
+                        <div class="pm-tile @cls" title="@m.Machine.Label@(m.DoneDate.HasValue ? " — PM " + m.DoneDate.Value.ToString("dd MMM") : m.Planned ? " — sudah ada plan" : " — belum PM")">
+                            <div class="pm-code">@m.Machine.Code</div>
+                            <div class="pm-sub">@(m.DoneDate.HasValue ? "✓ " + m.DoneDate.Value.ToString("dd MMM") : m.Planned ? "plan" : "belum")</div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <div class="panel mt-3">
+        <div class="panel-head"><h2>Aktivitas terbaru</h2><a class="link-arrow" href="/Mtc/Report?date=@DateTime.Today.ToString("yyyy-MM-dd")">Laporan hari ini →</a></div>
+        @if (Model.Recent.Count == 0) { <div class="empty-state">Belum ada aktivitas.</div> }
+        <ul class="feed">
+            @foreach (var a in Model.Recent)
+            {
+                <li>
+                    <span class="ty-tag @MaintenanceService.TypeCss(a.Type)" style="align-self:flex-start;margin-top:3px">@MaintenanceService.TypeText(a.Type)</span>
+                    <div class="f-body">
+                        <div class="f-line"><a href="/Mtc/Report?date=@a.Date.ToString("yyyy-MM-dd")#act@(a.Id)">@a.MachineLabel</a><span class="f-meta">@a.Date.ToString("dd MMM") · shift @a.Shift</span></div>
+                        <div class="f-meta">@a.Action · @a.Technicians@(a.HasPartReplacement ? " · 🔧 ganti part" : "")</div>
+                    </div>
+                </li>
+            }
+        </ul>
+    </div>
+</div>

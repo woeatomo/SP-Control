@@ -9,7 +9,11 @@ public enum TxType { In, Issue, LoanOut, LoanReturn, Adjustment }
 public enum LoanStatus { Open, Closed }
 public enum StockCheckStatus { Open, Closed }
 /// <summary>Requester = akun tablet peminta (hanya bisa membuat permintaan part).</summary>
-public enum UserRole { Admin, Viewer, Requester }
+public enum UserRole { Admin, Viewer, Requester, Technician }
+public enum RequestSource { Tablet, DailyReport }
+public enum Shift { A, B }
+public enum ActivityType { Breakdown, Corrective, Preventive, Inspection, Improvement, Other }
+public enum ActivityStatus { Done, Continue, WaitingPart }
 public enum RequestStatus { New, Processing, Ready, Done, Rejected }
 public enum RequestUrgency { Normal, Urgent }
 
@@ -184,6 +188,11 @@ public class StockTransaction
 {
     public int Id { get; set; }
     public int SiteId { get; set; }
+    /// <summary>
+    /// Aktivitas daily report maintenance yang memakai part ini. Satu baris Issued hanya bisa
+    /// tertaut ke SATU aktivitas → pergantian part tidak bisa tercatat ganda.
+    /// </summary>
+    public int? ActivityId { get; set; }
     public DateTime Date { get; set; }
     public TxType Type { get; set; }
     [StringLength(30)] public string DocNo { get; set; } = "";
@@ -272,6 +281,10 @@ public class PartRequest
     public int Id { get; set; }
     public int SiteId { get; set; }
     [StringLength(30)] public string ReqNo { get; set; } = "";
+    /// <summary>Tablet = permintaan biasa; DailyReport = konfirmasi part yang sudah dipakai tapi belum di-issue.</summary>
+    public RequestSource Source { get; set; }
+    /// <summary>Aktivitas daily report yang terkait; Issued dari permintaan ini otomatis tertaut ke aktivitas tersebut.</summary>
+    public int? ActivityId { get; set; }
     [StringLength(100)] public string RequesterName { get; set; } = "";
     /// <summary>Line / mesin / departemen peminta.</summary>
     [StringLength(120)] public string? Line { get; set; }
@@ -301,4 +314,78 @@ public class PartRequestLine
     /// <summary>Teks yang ditulis peminta (untuk part yang tidak ditemukan di katalog).</summary>
     [StringLength(200)] public string? FreeText { get; set; }
     public decimal Qty { get; set; } = 1;
+}
+
+/// <summary>Master mesin untuk modul Machine Maintenance.</summary>
+public class Machine
+{
+    public int Id { get; set; }
+    public int SiteId { get; set; }
+    [Required(ErrorMessage = "Kode mesin wajib diisi"), StringLength(30), Display(Name = "Kode Mesin")]
+    public string Code { get; set; } = "";
+    [Required(ErrorMessage = "Nama mesin wajib diisi"), StringLength(120), Display(Name = "Nama Mesin")]
+    public string Name { get; set; } = "";
+    [StringLength(80), Display(Name = "Area / Line")] public string? Area { get; set; }
+    [StringLength(80), Display(Name = "Maker")] public string? Maker { get; set; }
+    [StringLength(80), Display(Name = "Model / Tipe")] public string? ModelNo { get; set; }
+    /// <summary>Wajib PM setiap bulan (dihitung di progress PM dashboard).</summary>
+    [Display(Name = "Wajib PM bulanan")] public bool PmRequired { get; set; } = true;
+    public bool IsActive { get; set; } = true;
+    [StringLength(300)] public string? Notes { get; set; }
+    public string Label => Code + " — " + Name;
+}
+
+/// <summary>Rencana pekerjaan maintenance (daily plan).</summary>
+public class MaintenancePlan
+{
+    public int Id { get; set; }
+    public int SiteId { get; set; }
+    public DateTime Date { get; set; }
+    /// <summary>null = sepanjang hari / shift mana saja.</summary>
+    public Shift? Shift { get; set; }
+    public int? MachineId { get; set; }
+    public Machine? Machine { get; set; }
+    [StringLength(300)] public string Task { get; set; } = "";
+    public ActivityType Type { get; set; } = ActivityType.Preventive;
+    [StringLength(120)] public string? Pic { get; set; }
+    [StringLength(50)] public string? CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public bool Cancelled { get; set; }
+    public List<MaintenanceActivity> Activities { get; set; } = new();
+}
+
+/// <summary>Aktivitas harian tim maintenance (daily report).</summary>
+public class MaintenanceActivity
+{
+    public int Id { get; set; }
+    public int SiteId { get; set; }
+    public DateTime Date { get; set; }
+    public Shift Shift { get; set; }
+    public int? MachineId { get; set; }
+    public Machine? Machine { get; set; }
+    /// <summary>Lokasi / mesin di luar master (mis. utilitas).</summary>
+    [StringLength(120)] public string? MachineText { get; set; }
+    public ActivityType Type { get; set; }
+    [StringLength(500)] public string? Problem { get; set; }
+    [StringLength(500)] public string? Cause { get; set; }
+    [StringLength(1000)] public string? Action { get; set; }
+    public TimeSpan? StartTime { get; set; }
+    public TimeSpan? EndTime { get; set; }
+    /// <summary>Mesin berhenti (downtime) selama pekerjaan.</summary>
+    public bool MachineStopped { get; set; }
+    public ActivityStatus Status { get; set; } = ActivityStatus.Done;
+    /// <summary>Nama teknisi yang mengerjakan (dipisah koma).</summary>
+    [StringLength(200)] public string? Technicians { get; set; }
+    public bool HasPartReplacement { get; set; }
+    [StringLength(500)] public string? Remarks { get; set; }
+    public int? PlanId { get; set; }
+    public MaintenancePlan? Plan { get; set; }
+    [StringLength(50)] public string? CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime? UpdatedAt { get; set; }
+
+    public string MachineLabel => Machine != null ? Machine.Label : MachineText ?? "-";
+    /// <summary>Durasi pekerjaan (shift malam bisa lewat tengah malam).</summary>
+    public TimeSpan? Duration => StartTime.HasValue && EndTime.HasValue
+        ? (EndTime.Value >= StartTime.Value ? EndTime.Value - StartTime.Value : EndTime.Value + TimeSpan.FromDays(1) - StartTime.Value) : null;
 }

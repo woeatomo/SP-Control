@@ -1,5 +1,5 @@
 @* Popup detail spare part (dipakai di Master Data). Diisi oleh SP.showPart() di site.js. *@
-<div class="modal fade" id="partModal" tabindex="-1" data-admin="@(User.IsInRole("Admin") ? "1" : "0")">
+<div class="modal fade" id="partModal" tabindex="-1" data-admin="@(User.IsInRole("Admin") ? "1" : "0")" data-prices="@(User.IsInRole("Admin") || User.IsInRole("Viewer") ? "1" : "0")">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header py-2">

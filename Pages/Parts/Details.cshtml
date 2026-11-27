@@ -121,7 +121,12 @@
                         <td class="num">@StockService.Fmt(t.BalanceAfter)</td>
                         <td>@t.Pic</td>
                         <td>@t.Department</td>
-                        <td class="small">@t.Reference @t.Notes</td>
+                        <td class="small">@t.Reference @t.Notes
+                            @if (t.ActivityId is int aid && Model.Activities.TryGetValue(aid, out var act))
+                            {
+                                <div><a href="/Mtc/Report?date=@act.Date.ToString("yyyy-MM-dd")#act@(aid)">🛠 dipakai di @act.MachineLabel · @act.Date.ToString("dd MMM") shift @act.Shift</a></div>
+                            }
+                        </td>
                     </tr>
                 }
                 @if (Model.History.Count == 0) { <tr><td colspan="8" class="text-center text-muted py-3">Belum ada transaksi.</td></tr> }

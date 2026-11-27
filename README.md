@@ -25,6 +25,7 @@ Semua halaman wajib login. Akun awal dibuat otomatis saat database pertama kali 
 | `admin` | `admin123` | Admin — transaksi, ubah master data, kurs, stock checking, kelola user |
 | `viewer` | `viewer123` | Viewer — hanya melihat, mencari, export CSV, cetak label QR |
 | `tablet` | `tablet123` | Peminta (tablet) — hanya halaman permintaan part, tanpa harga |
+| `teknisi` | `teknisi123` | Teknisi Maintenance — modul Machine Maintenance, cari & minta part (tanpa harga/transaksi) |
 
 **Segera ganti kedua password ini** (klik nama user di kanan atas → Ganti Password, atau menu **User** → Reset). User baru, ubah role dan nonaktifkan akun ada di menu **User** (khusus Admin).
 
@@ -52,6 +53,25 @@ Untuk ruang sparepart yang terpisah dari ruang produksi / maintenance:
 - **PC ruang sparepart (admin)** mengecek permintaan baru setiap 5 detik: **bunyi notifikasi** (nada "pesan masuk" yang disintesis di browser), badge di menu **Permintaan**, judul tab berkedip, dan **popup** permintaan. Part dari katalog langsung tampil dengan stok, rack dan tombol Location; permintaan berupa teks otomatis dicocokkan ke katalog (termasuk istilah Indonesia → Inggris, mis. *oli → oil, sabuk → belt*) dan ditampilkan sebagai pilihan — bila tidak ada yang cocok, hanya teks permintaannya yang tampil dengan tombol **Cari manual**.
 - Tombol di popup: **Proses**, **Siap diambil**, **Tolak** (alasan tampil di tablet), **Buat Issued** (form Issued terisi otomatis: PIC, line, no. permintaan, part; setelah disimpan permintaan otomatis *Selesai*).
 - Browser baru mengizinkan suara setelah ada satu klik di halaman; klik **🔔 Suara aktif — tes** di halaman Permintaan untuk memastikan. Notifikasi desktop Windows juga muncul bila browser diizinkan (perlu HTTPS atau localhost).
+
+## Modul Machine Maintenance (daily report)
+
+Pindah modul lewat tombol **Modul** di kiri atas (akun teknisi langsung masuk ke modul ini).
+
+- **Dashboard**: daily plan hari ini (klik *Kerjakan* → form aktivitas terisi), progress PM bulan berjalan per mesin/area (sudah PM / ada plan / belum), pekerjaan yang belum selesai, aktivitas terbaru.
+- **Isi Aktivitas**: tanggal & shift (otomatis dari jam sekarang: Shift A 07:00–19:00, Shift B 19:00–07:00), mesin, jenis (Breakdown, Corrective, PM, Inspeksi, Improvement), problem, penyebab, tindakan, jam mulai/selesai, mesin stop, status, teknisi, dan **pergantian sparepart**.
+- **Laporan Harian**: default hari kemarin, dipisah Shift A & Shift B, pilihan tanggal (‹ › / Kemarin / Hari ini), filter jenis/status/teks/"ada pergantian part", urutan (jam, mesin, jenis, status, durasi), export CSV, cetak.
+- **Daily Plan**: tambah plan untuk beberapa mesin sekaligus (tombol pilih mesin yang belum PM bulan ini), batalkan, salin yang belum selesai ke besok.
+- **Master Mesin**: kode, nama, area, maker, wajib PM; import CSV.
+- **Pengisian PM** dan **Report PM**: segera hadir.
+
+### Pergantian part tanpa transaksi ganda
+
+1. **Stok hanya berkurang lewat Issued di web sparepart.** Daily report tidak pernah menggerakkan stok — ia **menautkan** transaksi Issued yang sudah ada.
+2. **Satu baris Issued hanya bisa tertaut ke satu aktivitas** (dicek di server); transaksi yang sudah dipakai laporan lain tidak muncul lagi di pilihan.
+3. Saat teknisi memilih *Ada pergantian part*, form menampilkan **Issued 3 hari di sekitar tanggal aktivitas yang belum dilaporkan** — dari permintaan tablet maupun Issued langsung — diurutkan menurut kecocokan (*mesin sama · PIC sama · hari yang sama*). Teknisi tinggal centang.
+4. Part **sudah dipakai tapi belum ada transaksinya** → teknisi memilih part dari katalog → tim sparepart menerima **"Konfirmasi pemakaian"** (notifikasi + popup, sama seperti permintaan tablet) → *Buat Issued* → transaksi otomatis tertaut ke aktivitas tersebut.
+5. Di web sparepart: **Riwayat** menampilkan kolom *Daily report* (mesin, tanggal, shift) dan filter **"Issued belum ada di daily report"** untuk rekonsiliasi; kartu stok part menampilkan *"dipakai di mesin …"*. Pencarian history pergantian part di Excel tidak diperlukan lagi.
 
 ## Multi site / section
 

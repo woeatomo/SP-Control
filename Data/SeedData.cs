@@ -36,7 +36,9 @@ public static class SeedData
             viewer.PasswordHash = hasher.HashPassword(viewer, "viewer123");
             var tablet = new AppUser { Username = "tablet", FullName = "Tablet Produksi", Role = UserRole.Requester };
             tablet.PasswordHash = hasher.HashPassword(tablet, "tablet123");
-            db.Users.AddRange(admin, viewer, tablet);
+            var tech = new AppUser { Username = "teknisi", FullName = "Budi", Role = UserRole.Technician };
+            tech.PasswordHash = hasher.HashPassword(tech, "teknisi123");
+            db.Users.AddRange(admin, viewer, tablet, tech);
             await db.SaveChangesAsync();
         }
 
@@ -103,5 +105,78 @@ public static class SeedData
         };
         var rates = await stock.GetRatesAsync();
         foreach (var (part, now) in samples) await stock.CreatePartAsync(part, now, rates);
+        await SeedMaintenanceAsync(db, stock, siteId);
+    }
+
+    /// <summary>Contoh modul Machine Maintenance (hanya untuk database baru).</summary>
+    private static async Task SeedMaintenanceAsync(AppDbContext db, StockService stock, int siteId)
+    {
+        if (await db.Machines.AnyAsync()) return;
+        Machine M(string code, string name, string area, string maker) => new() { SiteId = siteId, Code = code, Name = name, Area = area, Maker = maker };
+        var machines = new List<Machine>
+        {
+            M("INJ-01", "Injection Molding 1", "INJECTION", "Toshiba"), M("INJ-02", "Injection Molding 2", "INJECTION", "Toshiba"),
+            M("INJ-03", "Injection Molding 3", "INJECTION", "JSW"), M("INJ-04", "Injection Molding 4", "INJECTION", "JSW"),
+            M("INJ-05", "Injection Molding 5", "INJECTION", "Engel"), M("INJ-06", "Injection Molding 6", "INJECTION", "Engel"),
+            M("BLW-01", "Blow Molding 1", "BLOW MACHINE", "Aoki"), M("BLW-02", "Blow Molding 2", "BLOW MACHINE", "Aoki"),
+            M("BLW-03", "Blow Molding 3", "BLOW MACHINE", "Nissei"), M("CRS-01", "Crusher 1", "CRUSHING", "Matsui"),
+            M("CRS-02", "Crusher 2", "CRUSHING", "Matsui"), M("RBT-01", "Robot Take-out 1", "ROBOT", "Yushin"),
+            M("RBT-02", "Robot Take-out 2", "ROBOT", "Yushin"), M("CMP-01", "Air Compressor", "UTILITY", "Atlas Copco"),
+        };
+        machines[^1].PmRequired = true;
+        db.Machines.AddRange(machines);
+        await db.SaveChangesAsync();
+        int Id(string c) => machines.First(m => m.Code == c).Id;
+
+        var today = DateTime.Today; var yday = today.AddDays(-1);
+        var first = new DateTime(today.Year, today.Month, 1);
+        // PM yang sudah selesai bulan ini (beberapa mesin).
+        var pmDone = new[] { "INJ-01", "INJ-03", "BLW-01", "CRS-01", "RBT-01", "CMP-01" };
+        var day = first;
+        foreach (var c in pmDone)
+        {
+            if (day >= today) day = first;
+            db.MaintenanceActivities.Add(new MaintenanceActivity
+            {
+                SiteId = siteId, Date = day, Shift = Shift.A, MachineId = Id(c), Type = ActivityType.Preventive, Status = ActivityStatus.Done,
+                Action = "PM bulanan: cek & bersihkan, kencangkan baut, cek oli dan tekanan angin", StartTime = new(8, 0, 0), EndTime = new(10, 0, 0),
+                MachineStopped = true, Technicians = "Budi, Andi", CreatedBy = "teknisi"
+            });
+            day = day.AddDays(1);
+        }
+
+        // Laporan kemarin: termasuk breakdown dengan pergantian part yang tertaut ke Issued (tanpa transaksi ganda).
+        var belt = await db.Parts.FirstAsync(p => p.PartNumber == "MaPC-BANDO-0005");
+        var issue = await stock.PostEntryAsync(EntryMode.Issue,
+            new EntryHeader { Date = yday.AddHours(9).AddMinutes(20), Pic = "Andi", Department = "INJ-02 Injection Molding 2", Notes = "Belt putus" },
+            new List<EntryLine> { new() { PartId = belt.Id, Qty = 1 } });
+        var bd = new MaintenanceActivity
+        {
+            SiteId = siteId, Date = yday, Shift = Shift.A, MachineId = Id("INJ-02"), Type = ActivityType.Breakdown, Status = ActivityStatus.Done,
+            Problem = "Conveyor hopper berhenti, belt putus", Cause = "Belt aus (umur pakai)", Action = "Ganti belt baru, setting tension, trial run OK",
+            StartTime = new(9, 0, 0), EndTime = new(10, 15, 0), MachineStopped = true, Technicians = "Andi, Rudi", HasPartReplacement = true, CreatedBy = "teknisi"
+        };
+        db.MaintenanceActivities.AddRange(bd,
+            new MaintenanceActivity { SiteId = siteId, Date = yday, Shift = Shift.A, MachineId = Id("INJ-01"), Type = ActivityType.Inspection, Status = ActivityStatus.Done,
+                Action = "Inspeksi heater barrel zona 1–4, semua normal", StartTime = new(13, 0, 0), EndTime = new(13, 40, 0), Technicians = "Budi", CreatedBy = "teknisi" },
+            new MaintenanceActivity { SiteId = siteId, Date = yday, Shift = Shift.A, MachineId = Id("BLW-02"), Type = ActivityType.Corrective, Status = ActivityStatus.WaitingPart,
+                Problem = "Kebocoran angin di solenoid valve", Action = "Ganti seal sementara, menunggu solenoid valve baru", StartTime = new(15, 30, 0), EndTime = new(16, 30, 0),
+                Technicians = "Budi, Andi", CreatedBy = "teknisi" },
+            new MaintenanceActivity { SiteId = siteId, Date = yday, Shift = Shift.B, MachineId = Id("RBT-02"), Type = ActivityType.Corrective, Status = ActivityStatus.Done,
+                Problem = "Robot alarm sensor vacuum", Cause = "Sensor kotor", Action = "Bersihkan sensor & filter vacuum, setting ulang", StartTime = new(21, 10, 0), EndTime = new(21, 50, 0),
+                MachineStopped = true, Technicians = "Rudi", CreatedBy = "teknisi" },
+            new MaintenanceActivity { SiteId = siteId, Date = yday, Shift = Shift.B, MachineId = Id("CRS-02"), Type = ActivityType.Preventive, Status = ActivityStatus.Done,
+                Action = "PM bulanan: asah pisau crusher, cek bearing", StartTime = new(1, 0, 0), EndTime = new(3, 0, 0), MachineStopped = true, Technicians = "Rudi, Sari", CreatedBy = "teknisi" });
+        await db.SaveChangesAsync();
+        if (issue.Ok)
+            foreach (var t in await db.Transactions.Where(t => t.DocNo == issue.Message).ToListAsync()) t.ActivityId = bd.Id;
+
+        // Daily plan hari ini.
+        db.MaintenancePlans.AddRange(
+            new MaintenancePlan { SiteId = siteId, Date = today, MachineId = Id("INJ-04"), Task = "PM bulanan", Type = ActivityType.Preventive, Shift = Shift.A, Pic = "Budi, Andi" },
+            new MaintenancePlan { SiteId = siteId, Date = today, MachineId = Id("INJ-05"), Task = "PM bulanan", Type = ActivityType.Preventive, Shift = Shift.A, Pic = "Budi" },
+            new MaintenancePlan { SiteId = siteId, Date = today, MachineId = Id("BLW-02"), Task = "Ganti solenoid valve (lanjutan kemarin)", Type = ActivityType.Corrective, Pic = "Andi" },
+            new MaintenancePlan { SiteId = siteId, Date = today, MachineId = Id("RBT-02"), Task = "Cek ulang sensor vacuum", Type = ActivityType.Inspection, Shift = Shift.B, Pic = "Rudi" });
+        await db.SaveChangesAsync();
     }
 }

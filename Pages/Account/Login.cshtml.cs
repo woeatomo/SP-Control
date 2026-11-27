@@ -52,6 +52,7 @@ public class LoginModel : PageModel
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)), props);
         if (u.Role == UserRole.Requester) return LocalRedirect("/Request");
+        if (u.Role == UserRole.Technician && !(ReturnUrl ?? "").StartsWith("/Mtc", StringComparison.OrdinalIgnoreCase)) return LocalRedirect("/Mtc");
         return LocalRedirect(Url.IsLocalUrl(ReturnUrl) ? ReturnUrl! : "/");
     }
 

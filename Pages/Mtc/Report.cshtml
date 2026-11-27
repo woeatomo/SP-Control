@@ -1,0 +1,129 @@
+@page
+@model SparePartControl.Pages.Mtc.ReportModel
+@{
+    ViewData["Title"] = "Laporan Harian";
+    var culture = new System.Globalization.CultureInfo("id-ID");
+    var day = Model.Day;
+    var shifts = Model.Shift is "A" or "B" ? new[] { Enum.Parse<Shift>(Model.Shift) } : new[] { Shift.A, Shift.B };
+    var all = Model.Items;
+    var downtime = all.Where(a => a.MachineStopped && a.Duration.HasValue).Sum(a => a.Duration!.Value.TotalMinutes);
+    var partsCount = Model.Linked.Values.Sum(l => l.Count);
+    var unlinked = all.Count(a => a.HasPartReplacement && !Model.Linked.ContainsKey(a.Id) && !Model.Pending.ContainsKey(a.Id));
+    string D(DateTime d) => d.ToString("yyyy-MM-dd");
+    string Hm(TimeSpan? t) => t.HasValue ? t.Value.ToString(@"hh\:mm") : "–";
+}
+<div class="dash mtc">
+    <div class="dash-head">
+        <div>
+            <div class="dash-date" style="text-transform:none">Laporan harian Machine Maintenance <partial name="_SiteTitle" /></div>
+            <h1 class="dash-title">@day.ToString("dddd, d MMMM yyyy", culture)</h1>
+        </div>
+        <div class="dash-actions d-print-none">
+            <a class="btn btn-light" href="@Model.Url(("date", D(day.AddDays(-1))))" title="Hari sebelumnya">‹</a>
+            <form method="get" class="d-inline-flex">
+                @foreach (var kv in Request.Query.Where(k => !k.Key.Equals("date", StringComparison.OrdinalIgnoreCase))) { <input type="hidden" name="@kv.Key" value="@kv.Value" /> }
+                <input type="date" name="date" class="form-control" value="@D(day)" max="@D(DateTime.Today)" onchange="this.form.submit()" aria-label="Pilih tanggal" />
+            </form>
+            <a class="btn btn-light @(day >= DateTime.Today ? "disabled" : "")" href="@Model.Url(("date", D(day.AddDays(1))))" title="Hari berikutnya">›</a>
+            <a class="btn btn-light @(day == DateTime.Today.AddDays(-1) ? "active" : "")" href="@Model.Url(("date", D(DateTime.Today.AddDays(-1))))">Kemarin</a>
+            <a class="btn btn-light @(day == DateTime.Today ? "active" : "")" href="@Model.Url(("date", D(DateTime.Today)))">Hari ini</a>
+            @if (Model.CanEdit) { <a class="btn btn-primary" href="/Mtc/Activity">+ Isi aktivitas</a> }
+        </div>
+    </div>
+
+    <form method="get" class="panel filter-bar d-print-none">
+        <input type="hidden" name="date" value="@D(day)" />
+        <div class="segc seg-shift">
+            @foreach (var (v, l) in new[] { ("", "Semua shift"), ("A", "Shift A"), ("B", "Shift B") })
+            {
+                <input type="radio" class="btn-check" name="Shift" id="s@(v)" value="@v" checked="@((Model.Shift ?? "") == v)" onchange="this.form.submit()" /><label for="s@(v)">@l</label>
+            }
+        </div>
+        <select name="Type" class="form-select" onchange="this.form.submit()" aria-label="Jenis">
+            <option value="">Semua jenis</option>
+            @foreach (var t in Enum.GetValues<ActivityType>()) { <option value="@t" selected="@(Model.Type == t)">@MaintenanceService.TypeText(t)</option> }
+        </select>
+        <select name="Status" class="form-select" onchange="this.form.submit()" aria-label="Status">
+            <option value="">Semua status</option>
+            @foreach (var s in Enum.GetValues<ActivityStatus>()) { <option value="@s" selected="@(Model.Status == s)">@MaintenanceService.StatusText(s)</option> }
+        </select>
+        <select name="Sort" class="form-select" onchange="this.form.submit()" aria-label="Urutkan">
+            <option value="time" selected="@(Model.Sort == "time")">Urut: jam</option>
+            <option value="machine" selected="@(Model.Sort == "machine")">Urut: mesin</option>
+            <option value="type" selected="@(Model.Sort == "type")">Urut: jenis</option>
+            <option value="status" selected="@(Model.Sort == "status")">Urut: status</option>
+            <option value="duration" selected="@(Model.Sort == "duration")">Urut: durasi terlama</option>
+        </select>
+        <input name="Q" value="@Model.Q" class="form-control" placeholder="Cari mesin / pekerjaan / teknisi" />
+        <div class="form-check ms-1">
+            <input class="form-check-input" type="checkbox" name="OnlyParts" value="true" id="op" checked="@Model.OnlyParts" onchange="this.form.submit()" />
+            <label class="form-check-label" for="op">Ada pergantian part</label>
+        </div>
+        <a class="btn btn-light ms-auto" href="@Model.Url(("handler", "Export"))">Export CSV</a>
+        <button type="button" class="btn btn-light" onclick="window.print()">🖨 Cetak</button>
+    </form>
+
+    <div class="rep-sum">
+        <div><b>@all.Count</b> aktivitas</div>
+        <div><b>@all.Count(a => a.Type == ActivityType.Breakdown)</b> breakdown</div>
+        <div><b>@(downtime >= 60 ? $"{(int)(downtime / 60)} j {(int)(downtime % 60)} m" : $"{(int)downtime} m")</b> downtime</div>
+        <div><b>@partsCount</b> part diganti (tertaut)</div>
+        @if (unlinked > 0) { <div class="warn"><b>@unlinked</b> laporan "ada pergantian part" belum ditautkan</div> }
+    </div>
+
+    @foreach (var sh in shifts)
+    {
+        var rows = all.Where(a => a.Shift == sh).ToList();
+        <section class="panel shift-panel">
+            <div class="panel-head">
+                <h2>@MaintenanceService.ShiftLabel(sh)</h2>
+                <span class="panel-note">@rows.Count aktivitas</span>
+            </div>
+            @if (rows.Count == 0)
+            {
+                <div class="empty-state">Belum ada aktivitas di shift ini@(Model.Type.HasValue || Model.Status.HasValue || !string.IsNullOrWhiteSpace(Model.Q) || Model.OnlyParts ? " (sesuai filter)" : "").</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-borderless dash-table rep-table align-top mb-0">
+                        <thead><tr><th>Jam</th><th>Mesin</th><th>Jenis</th><th style="min-width:280px">Problem · Penyebab · Tindakan</th><th>Teknisi</th><th>Status</th><th style="min-width:220px">Pergantian part</th><th class="d-print-none"></th></tr></thead>
+                        <tbody>
+                            @foreach (var a in rows)
+                            {
+                                var lk = Model.Linked.GetValueOrDefault(a.Id); var pd = Model.Pending.GetValueOrDefault(a.Id);
+                                <tr id="act@(a.Id)">
+                                    <td class="nowrap">@Hm(a.StartTime)–@Hm(a.EndTime)@if (a.Duration.HasValue) { <div class="small text-muted">@((int)a.Duration.Value.TotalMinutes) menit</div> }</td>
+                                    <td><b>@(a.Machine?.Code ?? a.MachineText)</b><div class="small text-muted">@(a.Machine?.Name)@(a.Machine?.Area != null ? " · " + a.Machine.Area : "")</div>
+                                        @if (a.MachineStopped) { <span class="mstop">mesin stop</span> }</td>
+                                    <td><span class="ty-tag @MaintenanceService.TypeCss(a.Type)">@MaintenanceService.TypeText(a.Type)</span></td>
+                                    <td class="small">
+                                        @if (!string.IsNullOrWhiteSpace(a.Problem)) { <div><span class="lbl">Problem</span> @a.Problem</div> }
+                                        @if (!string.IsNullOrWhiteSpace(a.Cause)) { <div><span class="lbl">Penyebab</span> @a.Cause</div> }
+                                        <div><span class="lbl">Tindakan</span> @a.Action</div>
+                                        @if (!string.IsNullOrWhiteSpace(a.Remarks)) { <div class="text-muted">📝 @a.Remarks</div> }
+                                    </td>
+                                    <td class="small">@a.Technicians</td>
+                                    <td><span class="act-st as-@a.Status.ToString().ToLowerInvariant()">@MaintenanceService.StatusText(a.Status)</span></td>
+                                    <td class="small">
+                                        @if (!a.HasPartReplacement) { <span class="text-muted">Tidak ada</span> }
+                                        @if (lk != null) { foreach (var p in lk) { <div class="part-ok">✓ <a class="part-pop" href="/Parts/Details/@p.PartId" data-id="@p.PartId">@p.PartNumber</a> × @StockService.Fmt(p.Qty) <span class="text-muted">· @p.DocNo</span></div> } }
+                                        @if (pd != null) { foreach (var p in pd) { <div class="part-wait">⏳ @p.Label × @StockService.Fmt(p.Qty) <span class="text-muted">· menunggu konfirmasi sparepart</span></div> } }
+                                        @if (a.HasPartReplacement && lk == null && pd == null) { <div class="text-danger">⚠ ada pergantian, belum ditautkan</div> }
+                                    </td>
+                                    <td class="d-print-none text-end">@if (Model.CanEdit) { <a class="link-arrow" href="/Mtc/Activity?id=@a.Id">Edit</a> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+@section Scripts {
+<script>
+    document.querySelectorAll('.mtc .part-pop').forEach(a => a.addEventListener('click', e => { if (e.ctrlKey || e.metaKey) return; e.preventDefault(); SP.showPart(a.dataset.id); }));
+    if (location.hash) document.querySelector(location.hash)?.classList.add('row-hl');
+</script>
+}

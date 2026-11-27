@@ -22,13 +22,14 @@
         </div>
         <div class="col-6 col-md-2"><label class="form-label small mb-0">Part / No. dokumen</label><input name="Part" value="@Model.Part" class="form-control form-control-sm" /></div>
         <div class="col-6 col-md-2"><label class="form-label small mb-0">PIC / Mesin</label><input name="Pic" value="@Model.Pic" class="form-control form-control-sm" /></div>
+        <div class="col-12 col-md-auto"><div class="form-check mt-md-4"><input class="form-check-input" type="checkbox" name="Unreported" value="true" id="unrep" checked="@Model.Unreported" /><label class="form-check-label small" for="unrep">Issued belum ada di daily report</label></div></div>
         <div class="col-6 col-md-2 d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Filter</button><a class="btn btn-link btn-sm" asp-page="Index">Reset</a></div>
     </div>
 </form>
 <div class="card">
     <div class="table-responsive">
         <table class="table table-sm table-hover mb-0">
-            <thead><tr>@if (SiteCtx.IsAll) { <th>Site</th> }<th>Tanggal</th><th>Tipe</th><th>No. Dokumen</th><th>Part</th><th class="num">Qty</th><th class="num">Saldo</th><th class="num">Nilai USD</th><th>PIC</th><th>Mesin / Dept</th><th>Referensi / Catatan</th><th>Input oleh</th></tr></thead>
+            <thead><tr>@if (SiteCtx.IsAll) { <th>Site</th> }<th>Tanggal</th><th>Tipe</th><th>No. Dokumen</th><th>Part</th><th class="num">Qty</th><th class="num">Saldo</th><th class="num">Nilai USD</th><th>PIC</th><th>Mesin / Dept</th><th>Referensi / Catatan</th><th>Input oleh</th><th>Daily report</th></tr></thead>
             <tbody>
                 @foreach (var t in Model.Items)
                 {
@@ -45,9 +46,16 @@
                         <td>@t.Department</td>
                         <td class="small">@t.Reference @t.Notes</td>
                         <td class="small text-muted">@t.CreatedBy</td>
+                        <td class="small">
+                            @if (t.ActivityId is int aid && Model.Activities.TryGetValue(aid, out var act))
+                            {
+                                <a href="/Mtc/Report?date=@act.Date.ToString("yyyy-MM-dd")#act@(aid)" title="@act.Action">🛠 @act.MachineLabel<br /><span class="text-muted">@act.Date.ToString("dd MMM") shift @act.Shift</span></a>
+                            }
+                            else if (t.Type == TxType.Issue) { <span class="text-muted">belum dilaporkan</span> }
+                        </td>
                     </tr>
                 }
-                @if (Model.Items.Count == 0) { <tr><td colspan="12" class="text-center text-muted py-4">Tidak ada transaksi.</td></tr> }
+                @if (Model.Items.Count == 0) { <tr><td colspan="13" class="text-center text-muted py-4">Tidak ada transaksi.</td></tr> }
             </tbody>
         </table>
     </div>

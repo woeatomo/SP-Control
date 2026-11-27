@@ -1,0 +1,272 @@
+@page
+@model SparePartControl.Pages.Mtc.ActivityModel
+@{
+    ViewData["Title"] = Model.IsNew ? "Isi Aktivitas" : "Edit Aktivitas";
+    var a = Model.A;
+    var types = Enum.GetValues<ActivityType>();
+}
+<div class="dash mtc">
+    <div class="dash-head">
+        <div>
+            <div class="dash-date" style="text-transform:none">Daily report Machine Maintenance <partial name="_SiteTitle" /></div>
+            <h1 class="dash-title">@(Model.IsNew ? "Isi aktivitas" : "Edit aktivitas")</h1>
+        </div>
+        <a class="btn btn-light" href="/Mtc/Report?date=@a.Date.ToString("yyyy-MM-dd")">Laporan @a.Date.ToString("dd MMM")</a>
+    </div>
+    @if (Model.Plan != null)
+    {
+        <div class="alert alert-info py-2">Dari daily plan: <b>@Model.Plan.Task</b>@(Model.Plan.Machine != null ? " · " + Model.Plan.Machine.Label : "")</div>
+    }
+    <div asp-validation-summary="All" class="alert alert-danger py-2" style="@(ViewData.ModelState.IsValid ? "display:none" : "")"></div>
+
+    <form method="post" id="actForm" autocomplete="off">
+        <input type="hidden" asp-for="A.Id" />
+        <input type="hidden" asp-for="A.PlanId" />
+        <input type="hidden" asp-for="Unrecorded" id="unrecordedJson" />
+        <div class="row g-3">
+            <div class="col-xl-4">
+                <div class="panel h-100">
+                    <div class="panel-head"><h2>Kapan &amp; di mana</h2></div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label" asp-for="A.Date">Tanggal</label>
+                            <input class="form-control" asp-for="A.Date" type="date" asp-format="{0:yyyy-MM-dd}" required />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Shift</label>
+                            <div class="segc">
+                                <input type="radio" class="btn-check" name="A.Shift" id="shA" value="A" checked="@(a.Shift == Shift.A)" /><label for="shA">Shift A<small>07–19</small></label>
+                                <input type="radio" class="btn-check" name="A.Shift" id="shB" value="B" checked="@(a.Shift == Shift.B)" /><label for="shB">Shift B<small>19–07</small></label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="machineSel">Mesin</label>
+                            <input class="form-control form-control-sm mb-1" id="machineFilter" placeholder="Ketik untuk menyaring mesin…" />
+                            <select class="form-select" name="A.MachineId" id="machineSel" size="7">
+                                @foreach (var g in Model.Machines.GroupBy(m => string.IsNullOrWhiteSpace(m.Area) ? "Lainnya" : m.Area))
+                                {
+                                    <optgroup label="@g.Key">
+                                        @foreach (var m in g) { <option value="@m.Id" selected="@(a.MachineId == m.Id)">@m.Code — @m.Name</option> }
+                                    </optgroup>
+                                }
+                                <option value="" selected="@(!a.MachineId.HasValue && a.MachineText != null)">— Lokasi lain / di luar master —</option>
+                            </select>
+                            <input class="form-control mt-2 @(a.MachineId.HasValue || a.MachineText == null ? "d-none" : "")" asp-for="A.MachineText" id="machineText" placeholder="mis. Kompresor gedung B, Chiller" maxlength="120" />
+                            @if (Model.Machines.Count == 0) { <div class="form-text">Belum ada master mesin. <a href="/Mtc/Machines">Tambah mesin</a> atau isi lokasi lain.</div> }
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Jenis pekerjaan</label>
+                            <div class="chips-radio">
+                                @foreach (var t in types)
+                                {
+                                    <input type="radio" class="btn-check" name="A.Type" id="ty@(t)" value="@t" checked="@(a.Type == t)" />
+                                    <label for="ty@(t)" class="@MaintenanceService.TypeCss(t)">@MaintenanceService.TypeText(t)</label>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Status</label>
+                            <div class="segc">
+                                @foreach (var st in Enum.GetValues<ActivityStatus>())
+                                {
+                                    <input type="radio" class="btn-check" name="A.Status" id="st@(st)" value="@st" checked="@(a.Status == st)" /><label for="st@(st)">@MaintenanceService.StatusText(st)</label>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-8">
+                <div class="panel h-100">
+                    <div class="panel-head"><h2>Pekerjaan</h2></div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label" asp-for="A.Problem">Problem / keluhan</label>
+                            <textarea class="form-control" asp-for="A.Problem" rows="2" maxlength="500" placeholder="mis. Belt conveyor putus, mesin stop"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" asp-for="A.Cause">Penyebab <span class="text-muted small">(opsional)</span></label>
+                            <textarea class="form-control" asp-for="A.Cause" rows="2" maxlength="500" placeholder="mis. Belt aus / umur pakai"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" asp-for="A.Action">Tindakan / pekerjaan yang dilakukan <span class="req-star">*</span></label>
+                            <textarea class="form-control" asp-for="A.Action" rows="3" maxlength="1000" required placeholder="mis. Ganti belt baru, setting tension, trial run OK"></textarea>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" asp-for="A.StartTime">Mulai</label>
+                            <input class="form-control" asp-for="A.StartTime" type="time" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" asp-for="A.EndTime">Selesai</label>
+                            <input class="form-control" asp-for="A.EndTime" type="time" />
+                            <div class="form-text" id="dur"></div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" asp-for="A.MachineStopped" role="switch" />
+                                <label class="form-check-label" asp-for="A.MachineStopped">Mesin berhenti (downtime) selama pekerjaan</label>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label" asp-for="A.Technicians">Teknisi <span class="req-star">*</span> <span class="text-muted small">pisahkan dengan koma</span></label>
+                            <input class="form-control" asp-for="A.Technicians" id="techs" maxlength="200" required placeholder="mis. Budi, Andi" />
+                            <div class="name-chips" id="techChips">@foreach (var n in Model.TechNames.Take(14)) { <button type="button" data-n="@n">@n</button> }</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" asp-for="A.Remarks">Catatan</label>
+                            <input class="form-control" asp-for="A.Remarks" maxlength="500" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="panel parts-panel">
+                    <div class="panel-head">
+                        <h2>Ada pergantian sparepart?</h2>
+                        <div class="segc seg-yn">
+                            <input type="radio" class="btn-check" name="A.HasPartReplacement" id="hpN" value="false" checked="@(!a.HasPartReplacement)" /><label for="hpN">Tidak</label>
+                            <input type="radio" class="btn-check" name="A.HasPartReplacement" id="hpY" value="true" checked="@a.HasPartReplacement" /><label for="hpY">Ya, ada</label>
+                        </div>
+                    </div>
+                    <div id="partsBody" class="@(a.HasPartReplacement ? "" : "d-none")">
+                        <div class="parts-how">
+                            Stok hanya dikurangi oleh tim sparepart (Issued). Di sini Anda <b>menautkan</b> part yang sudah diambil, sehingga tidak ada transaksi ganda
+                            dan tim sparepart tidak perlu mencari lagi di laporan.
+                        </div>
+                        @if (Model.Pending.Count > 0)
+                        {
+                            <div class="alert alert-warning py-2 small">Menunggu konfirmasi tim sparepart:
+                                @foreach (var p in Model.Pending) { <span class="badge bg-light text-dark border me-1">@p.Label × @StockService.Fmt(p.Qty) (@p.ReqNo)</span> }</div>
+                        }
+                        <div class="row g-3">
+                            <div class="col-lg-7">
+                                <div class="sub-h">1. Pilih dari pengambilan part <span class="text-muted fw-normal">(Issued yang belum ada di laporan)</span></div>
+                                <div id="cands" class="cands"></div>
+                            </div>
+                            <div class="col-lg-5">
+                                <div class="sub-h">2. Part sudah dipakai tapi <u>belum ada transaksinya</u>?</div>
+                                <div class="small text-muted mb-2">Pilih part dari katalog. Tim sparepart menerima notifikasi untuk mencatat Issued — hasilnya otomatis tertaut ke laporan ini.</div>
+                                <div class="position-relative">
+                                    <input class="form-control" id="partQ" placeholder="Cari part: kode / nama / ukuran" />
+                                    <div class="list-group suggest" id="partSug"></div>
+                                </div>
+                                <ul class="unrec" id="unrec"></ul>
+                            </div>
+                        </div>
+                        <span class="text-danger small" data-valmsg-for="Parts"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            @if (!Model.IsNew)
+            {
+                <button type="submit" class="btn btn-outline-danger me-auto" form="delForm">Hapus</button>
+            }
+            <a class="btn btn-light" href="/Mtc">Batal</a>
+            <button type="submit" class="btn btn-primary px-4">Simpan aktivitas</button>
+        </div>
+    </form>
+    @if (!Model.IsNew)
+    {
+        <form method="post" asp-page-handler="Delete" asp-route-id="@a.Id" id="delForm" onsubmit="return confirm('Hapus aktivitas ini? Tautan part akan dilepas.')"></form>
+    }
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    const $ = id => document.getElementById(id), esc = SP.esc, fmt = SP.fmt;
+    const actId = @a.Id;
+    let cands = @Html.Raw(Model.CandidatesJson);
+    const checked = new Set(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.LinkTx.Count > 0 ? Model.LinkTx : new List<int>())));
+    cands.filter(c => c.linkedHere).forEach(c => checked.add(c.id));
+
+    // Mesin: saring daftar & "lokasi lain".
+    const sel = $('machineSel');
+    $('machineFilter').addEventListener('input', e => {
+        const k = e.target.value.toLowerCase();
+        sel.querySelectorAll('option').forEach(o => { o.hidden = k && o.value && !o.textContent.toLowerCase().includes(k); });
+    });
+    sel.addEventListener('change', () => { $('machineText').classList.toggle('d-none', sel.value !== ''); refresh(); });
+
+    // Teknisi: chip nama
+    $('techChips').addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        const names = $('techs').value.split(',').map(x => x.trim()).filter(Boolean);
+        if (!names.some(n => n.toLowerCase() === b.dataset.n.toLowerCase())) names.push(b.dataset.n);
+        $('techs').value = names.join(', '); refresh();
+    });
+
+    // Durasi
+    function dur() {
+        const s = $('A_StartTime').value, f = $('A_EndTime').value;
+        if (!s || !f) { $('dur').textContent = ''; return; }
+        let m = (+f.slice(0, 2) * 60 + +f.slice(3, 5)) - (+s.slice(0, 2) * 60 + +s.slice(3, 5)); if (m < 0) m += 1440;
+        $('dur').textContent = 'Durasi ' + Math.floor(m / 60) + ' jam ' + (m % 60) + ' menit';
+    }
+    ['A_StartTime', 'A_EndTime'].forEach(id => $(id).addEventListener('input', dur)); dur();
+
+    // Pergantian part
+    document.querySelectorAll('[name="A.HasPartReplacement"]').forEach(r => r.addEventListener('change', () =>
+        $('partsBody').classList.toggle('d-none', !$('hpY').checked)));
+
+    function renderCands() {
+        const box = $('cands');
+        if (!cands.length) { box.innerHTML = '<div class="empty-state small">Tidak ada pengambilan part (Issued) dalam 3 hari di sekitar tanggal ini yang belum dilaporkan.</div>'; return; }
+        box.innerHTML = cands.map(c => `<label class="cand ${c.score >= 50 ? 'good' : ''} ${checked.has(c.id) ? 'on' : ''}">
+            <input type="checkbox" name="LinkTx" value="${c.id}" ${checked.has(c.id) ? 'checked' : ''}>
+            <div class="cand-main"><div><b>${esc(c.partNumber)}</b> × ${fmt(c.qty)} ${esc(c.unit)}</div>
+                <div class="cand-name">${esc(c.name)}</div>
+                <div class="cand-meta">${esc(c.docNo)} · ${new Date(c.date).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}${c.pic ? ' · PIC ' + esc(c.pic) : ''}${c.department ? ' · ' + esc(c.department) : ''}</div></div>
+            ${c.why ? `<span class="cand-why">${esc(c.why)}</span>` : ''}
+        </label>`).join('');
+    }
+    $('cands').addEventListener('change', e => { if (e.target.name === 'LinkTx') { e.target.checked ? checked.add(+e.target.value) : checked.delete(+e.target.value); e.target.closest('.cand').classList.toggle('on', e.target.checked); } });
+    let t;
+    function refresh() {
+        clearTimeout(t);
+        t = setTimeout(async () => {
+            const p = new URLSearchParams({ date: $('A_Date').value || '', techs: $('techs').value, activityId: actId });
+            if (sel.value) p.set('machineId', sel.value);
+            const r = await fetch('/api/mtc/candidates?' + p); if (r.ok) { cands = await r.json(); renderCands(); }
+        }, 300);
+    }
+    ['A_Date', 'techs'].forEach(id => $(id).addEventListener('change', refresh));
+    renderCands();
+
+    // Part belum tercatat
+    let unrec = [];
+    try { unrec = JSON.parse($('unrecordedJson').value || '[]'); } catch (e) { }
+    function renderUnrec() {
+        $('unrec').innerHTML = unrec.map((u, i) => `<li><div><b>${esc(u.code || '')}</b> ${esc(u.name || '')}</div>
+            <div class="kz-step sm"><button type="button" data-i="${i}" data-d="-1">−</button><span>${fmt(u.qty)}</span><button type="button" data-i="${i}" data-d="1">+</button></div></li>`).join('');
+        $('unrecordedJson').value = JSON.stringify(unrec);
+    }
+    $('unrec').addEventListener('click', e => {
+        const b = e.target.closest('button[data-i]'); if (!b) return;
+        const u = unrec[+b.dataset.i]; u.qty += +b.dataset.d; if (u.qty <= 0) unrec.splice(+b.dataset.i, 1); renderUnrec();
+    });
+    let pt, plist = [];
+    $('partQ').addEventListener('input', () => {
+        clearTimeout(pt); const q = $('partQ').value.trim();
+        if (q.length < 2) { $('partSug').innerHTML = ''; return; }
+        pt = setTimeout(async () => {
+            const r = await fetch('/api/parts/find?take=8&q=' + encodeURIComponent(q)); plist = r.ok ? (await r.json()).items : [];
+            $('partSug').innerHTML = plist.map(p => `<button type="button" class="list-group-item list-group-item-action py-1" data-id="${p.id}"><b>${esc(p.partNumber)}</b> — ${esc(p.name)} <span class="small text-muted">stok ${fmt(p.stockQty)}</span></button>`).join('')
+                || '<div class="list-group-item small text-muted">Tidak ditemukan di katalog — tulis di Catatan, tim sparepart akan mengecek.</div>';
+        }, 220);
+    });
+    $('partSug').addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        const p = plist.find(x => x.id == b.dataset.id);
+        const ex = unrec.find(u => u.partId === p.id); if (ex) ex.qty++; else unrec.push({ partId: p.id, code: p.partNumber, name: p.name, qty: 1 });
+        $('partSug').innerHTML = ''; $('partQ').value = ''; renderUnrec();
+    });
+    renderUnrec();
+})();
+</script>
+}

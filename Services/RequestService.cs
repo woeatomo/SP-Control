@@ -37,7 +37,8 @@ public class RequestService
         _ => "Ditolak"
     };
 
-    public async Task<(PartRequest? Request, string? Error)> CreateAsync(NewRequest r, string? createdBy)
+    public async Task<(PartRequest? Request, string? Error)> CreateAsync(NewRequest r, string? createdBy,
+        RequestSource source = RequestSource.Tablet, int? activityId = null)
     {
         var site = _site.Current;
         if (site == null) return (null, "Tablet belum terhubung ke satu site. Hubungi admin.");
@@ -58,7 +59,7 @@ public class RequestService
 
         var req = new PartRequest
         {
-            SiteId = site.Id, ReqNo = head + n.ToString("000"), RequesterName = Trunc(name, 100), Line = Trunc(r.Line, 120),
+            SiteId = site.Id, Source = source, ActivityId = activityId, ReqNo = head + n.ToString("000"), RequesterName = Trunc(name, 100), Line = Trunc(r.Line, 120),
             Urgency = r.Urgent ? RequestUrgency.Urgent : RequestUrgency.Normal, Notes = Trunc(r.Notes, 500), CreatedBy = createdBy,
             Lines = items.Select(i => new PartRequestLine
             {
@@ -105,6 +106,10 @@ public class RequestService
         var r = await _db.PartRequests.FirstOrDefaultAsync(x => x.Id == requestId);
         if (r == null) return;
         r.Status = RequestStatus.Done; r.IssueDocNo = docNo; r.HandledBy = by; r.UpdatedAt = DateTime.Now;
+        // Konfirmasi pemakaian dari daily report: Issued langsung tertaut ke aktivitasnya (tanpa transaksi ganda).
+        if (r.ActivityId.HasValue)
+            foreach (var t in await _db.Transactions.Where(t => t.SiteId == r.SiteId && t.DocNo == docNo && t.Type == TxType.Issue && t.ActivityId == null).ToListAsync())
+                t.ActivityId = r.ActivityId;
         await _db.SaveChangesAsync();
     }
 
@@ -132,6 +137,7 @@ public class RequestService
         return new
         {
             r.Id, r.ReqNo, r.RequesterName, r.Line, Urgent = r.Urgency == RequestUrgency.Urgent, r.Notes,
+            Source = r.Source.ToString(), r.ActivityId,
             Status = r.Status.ToString(), StatusText = StatusText(r.Status), r.CreatedAt, r.HandledBy, r.ResponseNote, r.IssueDocNo,
             Lines = lines
         };

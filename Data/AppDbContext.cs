@@ -17,6 +17,9 @@ public class AppDbContext : DbContext
 
     public DbSet<Site> Sites => Set<Site>();
     public DbSet<PartRequest> PartRequests => Set<PartRequest>();
+    public DbSet<Machine> Machines => Set<Machine>();
+    public DbSet<MaintenancePlan> MaintenancePlans => Set<MaintenancePlan>();
+    public DbSet<MaintenanceActivity> MaintenanceActivities => Set<MaintenanceActivity>();
     public DbSet<PartRequestLine> PartRequestLines => Set<PartRequestLine>();
     public DbSet<UserSite> UserSites => Set<UserSite>();
 
@@ -58,6 +61,23 @@ public class AppDbContext : DbContext
         b.Entity<PartRequestLine>().HasOne(l => l.Part).WithMany().HasForeignKey(l => l.PartId).OnDelete(DeleteBehavior.SetNull);
         b.Entity<PartRequest>().HasQueryFilter(r => SiteIds == null || SiteIds.Contains(r.SiteId));
         b.Entity<PartRequestLine>().HasQueryFilter(l => SiteIds == null || SiteIds.Contains(l.Request.SiteId));
+
+        // ---- Machine Maintenance ----
+        b.Entity<Machine>().HasIndex(m => new { m.SiteId, m.Code }).IsUnique();
+        b.Entity<Machine>().Property(m => m.Code).UseCollation("NOCASE");
+        b.Entity<Machine>().HasOne<Site>().WithMany().HasForeignKey(m => m.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<MaintenancePlan>().HasIndex(p => new { p.SiteId, p.Date });
+        b.Entity<MaintenancePlan>().HasOne(p => p.Machine).WithMany().HasForeignKey(p => p.MachineId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<MaintenanceActivity>().HasIndex(a => new { a.SiteId, a.Date, a.Shift });
+        b.Entity<MaintenanceActivity>().HasIndex(a => new { a.MachineId, a.Date });
+        b.Entity<MaintenanceActivity>().HasOne(a => a.Machine).WithMany().HasForeignKey(a => a.MachineId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<MaintenanceActivity>().HasOne(a => a.Plan).WithMany(p => p.Activities).HasForeignKey(a => a.PlanId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<StockTransaction>().HasIndex(t => t.ActivityId);
+        b.Entity<StockTransaction>().HasOne<MaintenanceActivity>().WithMany().HasForeignKey(t => t.ActivityId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<PartRequest>().HasOne<MaintenanceActivity>().WithMany().HasForeignKey(r => r.ActivityId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<Machine>().HasQueryFilter(m => SiteIds == null || SiteIds.Contains(m.SiteId));
+        b.Entity<MaintenancePlan>().HasQueryFilter(m => SiteIds == null || SiteIds.Contains(m.SiteId));
+        b.Entity<MaintenanceActivity>().HasQueryFilter(m => SiteIds == null || SiteIds.Contains(m.SiteId));
 
         b.Entity<Part>().HasQueryFilter(p => SiteIds == null || SiteIds.Contains(p.SiteId));
         b.Entity<StockTransaction>().HasQueryFilter(t => SiteIds == null || SiteIds.Contains(t.SiteId));

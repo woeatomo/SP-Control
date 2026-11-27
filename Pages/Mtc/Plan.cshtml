@@ -1,0 +1,113 @@
+@page
+@model SparePartControl.Pages.Mtc.PlanModel
+@{
+    ViewData["Title"] = "Daily Plan";
+    var culture = new System.Globalization.CultureInfo("id-ID");
+    string D(DateTime d) => d.ToString("yyyy-MM-dd");
+}
+<div class="dash mtc">
+    <div class="dash-head">
+        <div>
+            <div class="dash-date" style="text-transform:none">Daily plan maintenance <partial name="_SiteTitle" /></div>
+            <h1 class="dash-title">@Model.Day.ToString("dddd, d MMMM yyyy", culture)</h1>
+        </div>
+        <div class="dash-actions">
+            <a class="btn btn-light" href="?date=@D(Model.Day.AddDays(-1))">‹</a>
+            <form method="get"><input type="date" name="date" class="form-control" value="@D(Model.Day)" onchange="this.form.submit()" aria-label="Tanggal" /></form>
+            <a class="btn btn-light" href="?date=@D(Model.Day.AddDays(1))">›</a>
+            <a class="btn btn-light @(Model.Day == DateTime.Today ? "active" : "")" href="?date=@D(DateTime.Today)">Hari ini</a>
+            <a class="btn btn-light" href="?date=@D(DateTime.Today.AddDays(1))">Besok</a>
+        </div>
+    </div>
+    <div class="row g-3">
+        @if (Model.CanEdit)
+        {
+            <div class="col-xl-4">
+                <form method="post" asp-page-handler="Add" asp-route-date="@D(Model.Day)" class="panel">
+                    <div class="panel-head"><h2>Tambah plan</h2></div>
+                    <label class="form-label">Mesin <span class="text-muted small">(boleh pilih beberapa; kosong = umum)</span></label>
+                    <input class="form-control form-control-sm mb-1" id="mf" placeholder="Saring mesin…" />
+                    <div class="mach-pick" id="mp">
+                        @foreach (var g in Model.Machines.GroupBy(m => string.IsNullOrWhiteSpace(m.Area) ? "Lainnya" : m.Area))
+                        {
+                            <div class="mp-area">@g.Key</div>
+                            @foreach (var m in g)
+                            {
+                                <label class="mp-item" data-t="@($"{m.Code} {m.Name} {m.Area}".ToLowerInvariant())"><input type="checkbox" name="machineIds" value="@m.Id" /> <b>@m.Code</b> @m.Name
+                                    @if (Model.PmMissing.Any(x => x.Id == m.Id)) { <span class="badge bg-light text-dark border">belum PM</span> }</label>
+                            }
+                        }
+                    </div>
+                    @if (Model.PmMissing.Count > 0)
+                    {
+                        <div><button type="button" class="btn btn-sm btn-link px-0" id="pickPm">Pilih @Model.PmMissing.Count mesin yang belum PM bulan ini</button></div>
+                    }
+                    <label class="form-label mt-2">Pekerjaan <span class="req-star">*</span></label>
+                    <input class="form-control" name="task" maxlength="300" required placeholder="mis. PM bulanan / ganti oli hidrolik" />
+                    <div class="row g-2 mt-1">
+                        <div class="col-6">
+                            <label class="form-label">Jenis</label>
+                            <select name="type" class="form-select">@foreach (var t in Enum.GetValues<ActivityType>()) { <option value="@t" selected="@(t == ActivityType.Preventive)">@MaintenanceService.TypeText(t)</option> }</select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Shift</label>
+                            <select name="shift" class="form-select"><option value="">Semua</option><option value="A">Shift A</option><option value="B">Shift B</option></select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">PIC <span class="text-muted small">(opsional)</span></label>
+                            <input class="form-control" name="pic" maxlength="120" placeholder="mis. Budi, Andi" />
+                        </div>
+                    </div>
+                    <button class="btn btn-primary w-100 mt-3" type="submit">Tambah ke plan @Model.Day.ToString("dd MMM")</button>
+                </form>
+            </div>
+        }
+        <div class="@(Model.CanEdit ? "col-xl-8" : "col-12")">
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>@Model.Items.Count(p => !p.Cancelled) plan</h2>
+                    @if (Model.CanEdit && Model.Items.Any(p => !p.Cancelled && !p.Activities.Any(a => a.Status == ActivityStatus.Done)))
+                    {
+                        <form method="post" asp-page-handler="Carry" asp-route-date="@D(Model.Day)"><button class="btn btn-sm btn-light" type="submit" title="Salin plan yang belum selesai ke hari berikutnya">Salin yang belum selesai ke besok →</button></form>
+                    }
+                </div>
+                @if (Model.Items.Count == 0) { <div class="empty-state">Belum ada plan untuk tanggal ini.</div> }
+                <ul class="plan-list">
+                    @foreach (var p in Model.Items)
+                    {
+                        var st = p.Cancelled ? "cancel" : SparePartControl.Pages.Mtc.IndexModel.PlanState(p);
+                        <li class="pl-@st">
+                            <span class="pl-check" aria-hidden="true">@(st == "done" ? "✓" : st == "progress" ? "…" : st == "cancel" ? "×" : "")</span>
+                            <div class="pl-main">
+                                <div class="pl-title @(p.Cancelled ? "text-decoration-line-through text-muted" : "")">@(p.Machine?.Code ?? "Umum") <span class="pl-task">@p.Task</span></div>
+                                <div class="pl-meta"><span class="ty-tag @MaintenanceService.TypeCss(p.Type)">@MaintenanceService.TypeText(p.Type)</span>
+                                    @(p.Shift.HasValue ? "Shift " + p.Shift : "Semua shift")@(string.IsNullOrWhiteSpace(p.Pic) ? "" : " · PIC " + p.Pic)@(p.Machine != null ? " · " + p.Machine.Name : "")
+                                    @foreach (var a in p.Activities) { <a href="/Mtc/Report?date=@D(a.Date)#act@(a.Id)">· laporan shift @a.Shift (@MaintenanceService.StatusText(a.Status))</a> }</div>
+                            </div>
+                            @if (Model.CanEdit)
+                            {
+                                if (st is "open" or "progress") { <a class="btn btn-sm btn-primary" href="/Mtc/Activity?plan=@p.Id">@(st == "progress" ? "Lanjutkan" : "Kerjakan") →</a> }
+                                <form method="post" asp-page-handler="Cancel" asp-route-id="@p.Id" asp-route-date="@D(Model.Day)">
+                                    <button class="btn btn-sm btn-link text-muted" type="submit">@(p.Activities.Count == 0 ? "Hapus" : p.Cancelled ? "Aktifkan" : "Batalkan")</button>
+                                </form>
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+@section Scripts {
+<script>
+    document.getElementById('mf')?.addEventListener('input', e => {
+        const k = e.target.value.toLowerCase();
+        document.querySelectorAll('.mp-item').forEach(l => l.style.display = !k || l.dataset.t.includes(k) ? '' : 'none');
+    });
+    document.getElementById('pickPm')?.addEventListener('click', () => {
+        const ids = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.PmMissing.Select(m => m.Id)));
+        document.querySelectorAll('[name=machineIds]').forEach(c => { if (ids.includes(+c.value)) c.checked = true; });
+        document.querySelector('[name=task]').value ||= 'PM bulanan';
+    });
+</script>
+}

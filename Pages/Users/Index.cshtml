@@ -14,6 +14,7 @@
                     <select name="role" class="form-select">
                         <option value="Viewer">Viewer — hanya melihat &amp; export</option>
                         <option value="Admin">Admin — transaksi &amp; ubah data di site-nya</option>
+                        <option value="Technician">Teknisi Maintenance — daily report, cari &amp; minta part</option>
                         <option value="Requester">Peminta (tablet) — hanya membuat permintaan part</option>
                     </select>
                 </div>
@@ -49,6 +50,7 @@
                                         <select name="role" class="form-select form-select-sm" style="width:110px" onchange="this.form.submit()" disabled="@me">
                                             <option value="Admin" selected="@(u.Role == UserRole.Admin)">Admin</option>
                                             <option value="Viewer" selected="@(u.Role == UserRole.Viewer)">Viewer</option>
+                                            <option value="Technician" selected="@(u.Role == UserRole.Technician)">Teknisi</option>
                                             <option value="Requester" selected="@(u.Role == UserRole.Requester)">Peminta (tablet)</option>
                                         </select>
                                     </form>

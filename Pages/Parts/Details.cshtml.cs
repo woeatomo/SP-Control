@@ -15,6 +15,7 @@ public class DetailsModel : PageModel
     public Part Part { get; set; } = null!;
     public List<StockTransaction> History { get; set; } = new();
     public List<Loan> OpenLoans { get; set; } = new();
+    public Dictionary<int, MaintenanceActivity> Activities { get; set; } = new();
     /// <summary>Pasangan part: versi original bila ini part 2nd, atau versi -2ND bila ini part original.</summary>
     public Part? Counterpart { get; set; }
 
@@ -27,6 +28,8 @@ public class DetailsModel : PageModel
         Counterpart = await _db.Parts.AsNoTracking().FirstOrDefaultAsync(x => x.PartNumber == pairNo && x.SiteId == p.SiteId);
         History = await _db.Transactions.AsNoTracking().Where(t => t.PartId == id)
             .OrderByDescending(t => t.Date).ThenByDescending(t => t.Id).Take(50).ToListAsync();
+        var aids = History.Where(t => t.ActivityId != null).Select(t => t.ActivityId!.Value).Distinct().ToList();
+        Activities = await _db.MaintenanceActivities.AsNoTracking().Include(a => a.Machine).Where(a => aids.Contains(a.Id)).ToDictionaryAsync(a => a.Id);
         OpenLoans = await _db.Loans.AsNoTracking().Where(l => l.PartId == id && l.Status == LoanStatus.Open).ToListAsync();
         return Page();
     }

@@ -153,6 +153,189 @@ namespace SparePartControl.Migrations
                     b.ToTable("Loans");
                 });
 
+            modelBuilder.Entity("SparePartControl.Models.Machine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Area")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Maker")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModelNo")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PmRequired")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SiteId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("Machines");
+                });
+
+            modelBuilder.Entity("SparePartControl.Models.MaintenanceActivity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Action")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Cause")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<TimeSpan?>("EndTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasPartReplacement")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("MachineId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("MachineStopped")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MachineText")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PlanId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Problem")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Shift")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SiteId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<TimeSpan?>("StartTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Technicians")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("MachineId", "Date");
+
+                    b.HasIndex("SiteId", "Date", "Shift");
+
+                    b.ToTable("MaintenanceActivities");
+                });
+
+            modelBuilder.Entity("SparePartControl.Models.MaintenancePlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Cancelled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("MachineId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Pic")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Shift")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SiteId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Task")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MachineId");
+
+                    b.HasIndex("SiteId", "Date");
+
+                    b.ToTable("MaintenancePlans");
+                });
+
             modelBuilder.Entity("SparePartControl.Models.Part", b =>
                 {
                     b.Property<int>("Id")
@@ -262,6 +445,9 @@ namespace SparePartControl.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("ActivityId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -302,6 +488,9 @@ namespace SparePartControl.Migrations
                     b.Property<int>("SiteId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
 
@@ -312,6 +501,8 @@ namespace SparePartControl.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ActivityId");
 
                     b.HasIndex("SiteId", "Status");
 
@@ -469,6 +660,9 @@ namespace SparePartControl.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("ActivityId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<double>("BalanceAfter")
                         .HasColumnType("REAL");
 
@@ -523,6 +717,8 @@ namespace SparePartControl.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ActivityId");
+
                     b.HasIndex("Date");
 
                     b.HasIndex("PartId", "Date");
@@ -564,6 +760,42 @@ namespace SparePartControl.Migrations
                     b.Navigation("Part");
                 });
 
+            modelBuilder.Entity("SparePartControl.Models.Machine", b =>
+                {
+                    b.HasOne("SparePartControl.Models.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SparePartControl.Models.MaintenanceActivity", b =>
+                {
+                    b.HasOne("SparePartControl.Models.Machine", "Machine")
+                        .WithMany()
+                        .HasForeignKey("MachineId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SparePartControl.Models.MaintenancePlan", "Plan")
+                        .WithMany("Activities")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Machine");
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("SparePartControl.Models.MaintenancePlan", b =>
+                {
+                    b.HasOne("SparePartControl.Models.Machine", "Machine")
+                        .WithMany()
+                        .HasForeignKey("MachineId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Machine");
+                });
+
             modelBuilder.Entity("SparePartControl.Models.Part", b =>
                 {
                     b.HasOne("SparePartControl.Models.Site", "Site")
@@ -577,6 +809,11 @@ namespace SparePartControl.Migrations
 
             modelBuilder.Entity("SparePartControl.Models.PartRequest", b =>
                 {
+                    b.HasOne("SparePartControl.Models.MaintenanceActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SparePartControl.Models.Site", null)
                         .WithMany()
                         .HasForeignKey("SiteId")
@@ -634,6 +871,11 @@ namespace SparePartControl.Migrations
 
             modelBuilder.Entity("SparePartControl.Models.StockTransaction", b =>
                 {
+                    b.HasOne("SparePartControl.Models.MaintenanceActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SparePartControl.Models.Part", "Part")
                         .WithMany()
                         .HasForeignKey("PartId")
@@ -662,6 +904,11 @@ namespace SparePartControl.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SparePartControl.Models.MaintenancePlan", b =>
+                {
+                    b.Navigation("Activities");
                 });
 
             modelBuilder.Entity("SparePartControl.Models.PartRequest", b =>

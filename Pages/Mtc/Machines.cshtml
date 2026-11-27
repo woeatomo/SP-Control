@@ -1,0 +1,60 @@
+@page
+@model SparePartControl.Pages.Mtc.MachinesModel
+@{ ViewData["Title"] = "Master Mesin"; var editing = Model.Input.Id != 0; }
+<div class="dash mtc">
+    <div class="dash-head">
+        <div><div class="dash-date" style="text-transform:none">Machine Maintenance <partial name="_SiteTitle" /></div><h1 class="dash-title">Master mesin</h1></div>
+        <form method="get" class="d-flex gap-2"><input name="Q" value="@Model.Q" class="form-control" placeholder="Cari kode / nama / area" /><button class="btn btn-light">Cari</button></form>
+    </div>
+    <div class="row g-3">
+        @if (Model.CanEdit)
+        {
+            <div class="col-xl-4">
+                <form method="post" asp-page-handler="Save" class="panel">
+                    <div class="panel-head"><h2>@(editing ? "Edit " + Model.Input.Code : "Mesin baru")</h2></div>
+                    <input type="hidden" asp-for="Input.Id" />
+                    <div asp-validation-summary="All" class="text-danger small"></div>
+                    <div class="row g-2">
+                        <div class="col-5"><label class="form-label" asp-for="Input.Code"></label><input class="form-control font-monospace text-uppercase" asp-for="Input.Code" placeholder="INJ-01" /></div>
+                        <div class="col-7"><label class="form-label" asp-for="Input.Name"></label><input class="form-control" asp-for="Input.Name" placeholder="Injection Molding 1" /></div>
+                        <div class="col-6"><label class="form-label" asp-for="Input.Area"></label><input class="form-control" asp-for="Input.Area" list="areas" placeholder="INJECTION" />
+                            <datalist id="areas">@foreach (var a in Model.Areas) { <option value="@a"></option> }</datalist></div>
+                        <div class="col-6"><label class="form-label" asp-for="Input.Maker"></label><input class="form-control" asp-for="Input.Maker" /></div>
+                        <div class="col-12"><label class="form-label" asp-for="Input.ModelNo"></label><input class="form-control" asp-for="Input.ModelNo" /></div>
+                        <div class="col-12">
+                            <div class="form-check"><input class="form-check-input" asp-for="Input.PmRequired" /><label class="form-check-label" asp-for="Input.PmRequired">Wajib PM bulanan (masuk progress PM dashboard)</label></div>
+                            <div class="form-check"><input class="form-check-input" asp-for="Input.IsActive" /><label class="form-check-label" asp-for="Input.IsActive">Aktif</label></div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-3"><button class="btn btn-primary" type="submit">@(editing ? "Simpan" : "Tambah mesin")</button>@if (editing) { <a class="btn btn-light" href="/Mtc/Machines">Batal</a> }</div>
+                </form>
+                <form method="post" asp-page-handler="Import" enctype="multipart/form-data" class="panel mt-3">
+                    <div class="panel-head"><h2>Import CSV</h2></div>
+                    <div class="small text-muted mb-2">Header: <code>Code, Name, Area, Maker, Model, PmRequired</code> (Yes/No). Kode yang sudah ada diperbarui.</div>
+                    <div class="d-flex gap-2"><input type="file" name="file" accept=".csv" class="form-control" required /><button class="btn btn-light" type="submit">Import</button></div>
+                </form>
+            </div>
+        }
+        <div class="@(Model.CanEdit ? "col-xl-8" : "col-12")">
+            <div class="panel">
+                <div class="panel-head"><h2>@Model.Items.Count mesin</h2><span class="panel-note">@Model.Items.Count(m => m.IsActive && m.PmRequired) wajib PM</span></div>
+                <div class="table-responsive">
+                    <table class="table table-borderless dash-table align-middle mb-0">
+                        <thead><tr><th>Kode</th><th>Nama</th><th>Area</th><th>Maker / Model</th><th>PM</th><th>Status</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var m in Model.Items)
+                            {
+                                <tr class="@(m.IsActive ? "" : "text-muted")">
+                                    <td class="font-monospace fw-semibold">@m.Code</td><td>@m.Name</td><td>@m.Area</td><td class="small">@m.Maker @m.ModelNo</td>
+                                    <td>@(m.PmRequired ? "✓ bulanan" : "–")</td><td>@(m.IsActive ? "Aktif" : "Nonaktif")</td>
+                                    <td class="text-end">@if (Model.CanEdit) { <a class="link-arrow" href="?edit=@m.Id">Edit</a> }</td>
+                                </tr>
+                            }
+                            @if (Model.Items.Count == 0) { <tr><td colspan="7" class="empty-state">Belum ada mesin.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -89,8 +89,8 @@ window.SP = (function () {
                 <div class="col-md-5"><dl class="row mb-0">
                     ${row('Spesifikasi', esc(p.specification))}${row('Model', esc(p.category))}${row('Maker', esc(p.brand))}
                     ${row('Supplier', esc(p.supplier))}${row('Mesin / Line', esc(p.machine))}
-                    ${row('Harga', esc(p.currency) + ' ' + fmt(p.unitPrice) + ' <span class="text-muted">(USD ' + money(p.unitPriceUsd) + ')</span>')}
-                    ${row('Nilai Stok', '<b>USD ' + money(p.totalValueUsd) + '</b>')}
+                    ${el.dataset.prices === '1' ? row('Harga', esc(p.currency) + ' ' + fmt(p.unitPrice) + ' <span class="text-muted">(USD ' + money(p.unitPriceUsd) + ')</span>') : ''}
+                    ${el.dataset.prices === '1' ? row('Nilai Stok', '<b>USD ' + money(p.totalValueUsd) + '</b>') : ''}
                     ${row('Tanda', (p.condition === 'Second' ? '<span class="badge bg-secondary">2nd used</span> ' : 'Baru ') + (p.isReusable ? '<span class="badge badge-soft">♻ Reusable</span>' : ''))}
                     ${row('Stock Category', p.status === 'Active' ? 'ACTIVE' : 'INACTIVE')}${row('Remark', esc(p.remarks))}
                 </dl></div>

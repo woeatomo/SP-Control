@@ -18,6 +18,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AuthorizePage("/Parts/Edit", "Admin");
     o.Conventions.AuthorizePage("/Parts/Import", "Admin");
     o.Conventions.AuthorizeFolder("/Requests", "Admin");
+    o.Conventions.AuthorizePage("/Mtc/Activity", "Mtc");
     // Pengaturan, kurs, site dan user: hanya admin dengan akses semua site.
     o.Conventions.AuthorizeFolder("/Settings", "SuperAdmin");
     o.Conventions.AuthorizeFolder("/Users", "SuperAdmin");
@@ -33,6 +34,7 @@ builder.Services.AddSingleton<AppSettingsService>();
 builder.Services.AddScoped<PartCode>();
 builder.Services.AddScoped<MasterImport>();
 builder.Services.AddScoped<RequestService>();
+builder.Services.AddScoped<MaintenanceService>();
 builder.Services.AddSingleton<ImageStore>();
 builder.Services.AddSingleton<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 // Versi berikutnya: ganti NullRackLocator dengan implementasi lampu/LCD rak.
@@ -61,7 +63,9 @@ builder.Services.AddAuthorization(o =>
     // Semua halaman & API wajib login kecuali yang ditandai AllowAnonymous.
     o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
     o.AddPolicy("Admin", p => p.RequireRole(nameof(UserRole.Admin)));
-    o.AddPolicy("Kiosk", p => p.RequireRole(nameof(UserRole.Requester), nameof(UserRole.Admin)));
+    o.AddPolicy("Kiosk", p => p.RequireRole(nameof(UserRole.Requester), nameof(UserRole.Admin), nameof(UserRole.Technician)));
+    // Isi daily report / plan / master mesin: teknisi maintenance & admin.
+    o.AddPolicy("Mtc", p => p.RequireRole(nameof(UserRole.Technician), nameof(UserRole.Admin)));
     o.AddPolicy("SuperAdmin", p => p.RequireRole(nameof(UserRole.Admin)).RequireClaim("allsites", "1"));
 });
 
@@ -94,6 +98,23 @@ app.Use(async (ctx, next) =>
         {
             if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)) { ctx.Response.StatusCode = 403; return; }
             ctx.Response.Redirect("/Request");
+            return;
+        }
+    }
+    // Teknisi maintenance: modul maintenance + cari part + minta part (tanpa transaksi / harga / pengaturan).
+    if (ctx.User.IsInRole(nameof(UserRole.Technician)))
+    {
+        var path = ctx.Request.Path.Value ?? "/";
+        string[] allowed = { "/Mtc", "/api/mtc/", "/Search", "/Request", "/api/request/", "/api/parts/find", "/api/parts/lookup", "/api/parts/search",
+                             "/Account/", "/qr", "/lib/", "/css/", "/js/", "/favicon", "/site/switch" };
+        var ok = path == "/" || allowed.Any(a => path.Equals(a, StringComparison.OrdinalIgnoreCase)
+                     || path.StartsWith(a.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase) || (a.EndsWith('/') && path.StartsWith(a, StringComparison.OrdinalIgnoreCase)))
+                 || System.Text.RegularExpressions.Regex.IsMatch(path, @"^/(api/)?parts/\d+(/image)?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (path == "/") { ctx.Response.Redirect("/Mtc"); return; }
+        if (!ok)
+        {
+            if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)) { ctx.Response.StatusCode = 403; return; }
+            ctx.Response.Redirect("/Mtc");
             return;
         }
     }
@@ -249,7 +270,7 @@ app.MapGet("/api/requests/poll", async (AppDbContext db, SiteContext site) =>
     var open = await db.PartRequests.AsNoTracking()
         .Where(r => r.Status == RequestStatus.New || r.Status == RequestStatus.Processing || r.Status == RequestStatus.Ready)
         .OrderByDescending(r => r.Id).Take(50)
-        .Select(r => new { r.Id, r.SiteId, r.ReqNo, r.RequesterName, r.Line, r.Status, r.Urgency, r.CreatedAt, Items = r.Lines.Count }).ToListAsync();
+        .Select(r => new { r.Id, r.SiteId, r.ReqNo, r.RequesterName, r.Line, r.Status, r.Urgency, r.CreatedAt, r.Source, Items = r.Lines.Count }).ToListAsync();
     return Results.Json(new
     {
         newCount = open.Count(r => r.Status == RequestStatus.New),
@@ -257,7 +278,8 @@ app.MapGet("/api/requests/poll", async (AppDbContext db, SiteContext site) =>
         items = open.Select(r => new
         {
             r.Id, r.ReqNo, r.RequesterName, r.Line, Status = r.Status.ToString(), StatusText = RequestService.StatusText(r.Status),
-            Urgent = r.Urgency == RequestUrgency.Urgent, r.CreatedAt, r.Items, Site = site.MultiSiteSystem ? site.CodeOf(r.SiteId) : null
+            Urgent = r.Urgency == RequestUrgency.Urgent, r.CreatedAt, r.Items, Site = site.MultiSiteSystem ? site.CodeOf(r.SiteId) : null,
+            Usage = r.Source == RequestSource.DailyReport
         })
     });
 }).RequireAuthorization("Admin");
@@ -279,6 +301,18 @@ app.MapPost("/api/requests/{id:int}/lines/{lineId:int}/link", async (int id, int
     var err = await svc.LinkLineAsync(id, lineId, body.PartId);
     return err == null ? Results.Ok() : Results.BadRequest(new { error = err });
 }).RequireAuthorization("Admin");
+
+// Kandidat transaksi Issued untuk ditautkan ke aktivitas daily report (dihitung ulang saat form berubah).
+app.MapGet("/api/mtc/candidates", async (DateTime date, int? machineId, string? techs, int? activityId, AppDbContext db, MaintenanceService mtc, SiteContext site) =>
+{
+    if (site.Current == null) return Results.BadRequest();
+    var a = new MaintenanceActivity
+    {
+        Id = activityId ?? 0, SiteId = site.Current.Id, Date = date.Date, Technicians = techs, MachineId = machineId,
+        Machine = machineId.HasValue ? await db.Machines.AsNoTracking().FirstOrDefaultAsync(m => m.Id == machineId) : null
+    };
+    return Results.Json(await mtc.CandidatesAsync(a));
+}).RequireAuthorization("Mtc");
 
 // Tombol "Location": minta rak memberi sinyal posisi part (lampu berkedip / LCD). Khusus Admin.
 app.MapPost("/api/parts/{id:int}/locate", async (int id, HttpRequest req, AppDbContext db, IRackLocator rack, CancellationToken ct) =>

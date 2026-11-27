@@ -37,7 +37,7 @@ window.SPReq = (function () {
 
     function render(d) {
         current = d;
-        document.getElementById('reqKicker').innerHTML = `${d.urgent ? '<span class="badge bg-danger me-1">⚡ URGENT</span>' : ''}<span class="req-st ${stCls[d.status]}">${esc(d.statusText)}</span> · ${ago(d.createdAt)}`;
+        document.getElementById('reqKicker').innerHTML = (d.source === 'DailyReport' ? '<span class="badge bg-dark me-1">KONFIRMASI PEMAKAIAN · daily report</span>' : '') + `${d.urgent ? '<span class="badge bg-danger me-1">⚡ URGENT</span>' : ''}<span class="req-st ${stCls[d.status]}">${esc(d.statusText)}</span> · ${ago(d.createdAt)}`;
         document.getElementById('reqTitle').innerHTML = '<span class="req-pic-label">PIC peminta</span> ' + `${esc(d.requesterName)}${d.line ? ` <span class="text-muted fw-normal">· untuk ${esc(d.line)}</span>` : ''} <span class="req-no">${esc(d.reqNo)}</span>`;
         const lines = d.lines.map(l => {
             if (l.part) return `<div class="rq-line">${partRow(l.part, l.qty)}</div>`;
@@ -55,6 +55,7 @@ window.SPReq = (function () {
                 <a class="small" href="/Search?q=${encodeURIComponent(l.freeText)}" target="_blank">Bukan ini? Cari manual →</a></div>`;
         }).join('');
         document.getElementById('reqBody').innerHTML =
+            (d.source === 'DailyReport' ? `<div class="alert alert-warning py-2">Part ini <b>sudah dipakai</b> teknisi tetapi belum ada transaksinya. Buat Issued untuk mencatat pengurangan stok — transaksi otomatis tertaut ke daily report (tidak perlu dicatat ulang).</div>` : '') +
             (d.notes ? `<div class="rq-notes">📝 ${esc(d.notes)}</div>` : '') + lines +
             (d.responseNote ? `<div class="rq-notes mt-2">💬 ${esc(d.responseNote)}</div>` : '') +
             (d.issueDocNo ? `<div class="alert alert-success py-2 mt-2 mb-0">Sudah di-issue: <b>${esc(d.issueDocNo)}</b>${d.handledBy ? ' oleh ' + esc(d.handledBy) : ''}</div>` : '') +
