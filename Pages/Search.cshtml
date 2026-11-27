@@ -1,0 +1,160 @@
+@page
+@model SparePartControl.Pages.SearchModel
+@{
+    ViewData["Title"] = "Cari Part";
+    var isAdmin = User.IsInRole("Admin");
+}
+<div class="srch" data-admin="@(isAdmin ? "1" : "0")" data-multisite="@(SiteCtx.MultiSiteSystem ? "1" : "0")">
+    <div class="srch-hero">
+        <h1 class="dash-title mb-1">Cari spare part <partial name="_SiteTitle" /></h1>
+        <div class="text-muted small mb-3">Ketik kode, nama, ukuran, maker, supplier, mesin atau lokasi rack — boleh beberapa kata, mis. <code>bando 1440</code> atau <code>s8m1440</code>. Dari @Model.TotalParts.ToString("N0") part.</div>
+        <div class="srch-box">
+            <span class="srch-ico" aria-hidden="true">⌕</span>
+            <input id="sq" type="search" class="form-control" placeholder="Cari part…" autocomplete="off" autofocus aria-label="Cari spare part" />
+            <button type="button" class="btn btn-light srch-scan" id="sqScan" title="Scan QR dengan kamera">📷 Scan</button>
+        </div>
+        <div class="srch-filters">
+            <div class="d-flex flex-wrap" role="group" aria-label="Filter cepat">
+                <button type="button" class="btn btn-sm fchip active" data-f="">Semua</button>
+                <button type="button" class="btn btn-sm fchip" data-f="stock">Ada stok</button>
+                <button type="button" class="btn btn-sm fchip" data-f="restock">Perlu restock</button>
+                <button type="button" class="btn btn-sm fchip" data-f="reusable">♻ Reusable</button>
+                <button type="button" class="btn btn-sm fchip" data-f="second">2nd used</button>
+            </div>
+            <select id="sModel" class="form-select form-select-sm" aria-label="Model">
+                <option value="">Semua model</option>
+                @foreach (var m in Model.Models) { <option value="@m">@m</option> }
+            </select>
+        </div>
+    </div>
+
+    <div id="sRecent" class="srch-recent"></div>
+    <div id="sInfo" class="srch-info"></div>
+    <div id="sResults" class="srch-grid" aria-live="polite"></div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    const root = document.querySelector('.srch'), admin = root.dataset.admin === '1', multi = root.dataset.multisite === '1';
+    const box = document.getElementById('sq'), out = document.getElementById('sResults'), info = document.getElementById('sInfo'),
+        recentEl = document.getElementById('sRecent'), modelSel = document.getElementById('sModel');
+    let f = '', seq = 0, timer;
+    const esc = SP.esc, fmt = SP.fmt;
+    const lvCls = { EMPTY: 'lv-empty', LOW: 'lv-low', CRITICAL: 'lv-critical', NORMAL: 'lv-normal', OVERSTOCK: 'lv-over' };
+
+    // Pencarian terakhir (hanya di browser ini).
+    const RKEY = 'sp_recent_search';
+    const getRecent = () => { try { return JSON.parse(localStorage.getItem(RKEY) || '[]'); } catch (e) { return []; } };
+    function saveRecent(q) {
+        q = q.trim(); if (q.length < 2) return;
+        const list = [q, ...getRecent().filter(x => x.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+        try { localStorage.setItem(RKEY, JSON.stringify(list)); } catch (e) { }
+    }
+    function showRecent() {
+        const list = getRecent();
+        recentEl.innerHTML = list.length && !box.value.trim()
+            ? '<span class="text-muted small me-1">Terakhir dicari:</span>' + list.map(q => `<button type="button" class="chip chip-info rchip">${esc(q)}</button>`).join('')
+            : '';
+    }
+    recentEl.addEventListener('click', e => { const b = e.target.closest('.rchip'); if (b) { box.value = b.textContent; run(true); } });
+
+    // Tandai yang cocok: frasa utuh dulu, lalu kata minimal 2 karakter (angka/huruf tunggal tidak ditandai).
+    function hl(text, tokens) {
+        let s = esc(text || '');
+        const terms = [tokens.join(' '), ...tokens].filter((t, i) => t && (i === 0 ? tokens.length > 1 : t.length >= 2));
+        if (!terms.length || !s) return s;
+        const re = new RegExp('(' + terms.map(t => esc(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+        return s.replace(re, '<mark>$1</mark>');
+    }
+
+    function card(p, tokens) {
+        const img = p.imageUrl
+            ? `<img src="${p.imageUrl}" alt="" loading="lazy">`
+            : `<span class="sc-noimg" aria-hidden="true">⚙</span>`;
+        const meta = [p.specification, p.brand, p.category].filter(Boolean).map(x => hl(x, tokens)).join(' · ');
+        return `<article class="sc" data-id="${p.id}" tabindex="0">
+            <div class="sc-img">${img}</div>
+            <div class="sc-body">
+                <div class="sc-top">
+                    <span class="sc-code">${hl(p.partNumber, tokens)}</span>
+                    <span class="badge lv ${lvCls[p.level] || ''}">${esc(p.level)}</span>
+                    ${p.isReusable ? '<span class="badge badge-soft" title="Reusable">♻</span>' : ''}
+                    ${p.condition === 'Second' ? '<span class="badge bg-secondary">2nd</span>' : ''}
+                    ${multi && p.siteCode ? `<span class="site-tag">${esc(p.siteCode)}</span>` : ''}
+                </div>
+                <div class="sc-name">${hl(p.name, tokens)}</div>
+                ${meta ? `<div class="sc-meta">${meta}</div>` : ''}
+                <div class="sc-row">
+                    <span class="loc-chip" data-loc>📍 ${p.location ? hl(p.location, tokens) : '<span class="text-muted fw-normal">rack belum diisi</span>'}</span>
+                    <span class="sc-stock"><b>${fmt(p.stockQty)}</b> ${esc(p.unit)} <span class="text-muted">· min ${fmt(p.minStock)}${p.maxStock > 0 ? ' · max ' + fmt(p.maxStock) : ''}</span></span>
+                </div>
+                ${p.supplier ? `<div class="sc-meta">Supplier: ${hl(p.supplier, tokens)}</div>` : ''}
+                <div class="sc-msg small text-muted"></div>
+                <div class="sc-actions">
+                    ${admin && p.location ? `<button type="button" class="btn btn-sm btn-outline-primary act-loc">📍 Location</button>` : ''}
+                    ${admin ? `<a class="btn btn-sm btn-primary" href="/Entry/issue?partId=${p.id}">Issue</a>` : ''}
+                    <a class="btn btn-sm btn-light" href="/Parts/Labels?ids=${p.id}" target="_blank">🏷 Label</a>
+                    <button type="button" class="btn btn-sm btn-light act-detail">Detail</button>
+                </div>
+            </div>
+        </article>`;
+    }
+
+    async function run(remember) {
+        const q = box.value.trim(), model = modelSel.value;
+        const params = new URLSearchParams();
+        if (q) params.set('q', q); if (f) params.set('f', f); if (model) params.set('model', model);
+        history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : ''));
+        showRecent();
+        if (!q && !f && !model) { out.innerHTML = ''; info.innerHTML = '<div class="empty-state">Mulai ketik untuk mencari, atau scan QR code part.</div>'; return; }
+        const my = ++seq;
+        params.set('take', '60');
+        const r = await fetch('/api/parts/find?' + params);
+        if (my !== seq) return; // hasil ketikan lama
+        const j = r.ok ? await r.json() : { total: 0, items: [] };
+        const tokens = q.split(/\s+/).filter(Boolean);
+        if (remember && q) saveRecent(q);
+        if (j.items.length === 0) {
+            out.innerHTML = '';
+            info.innerHTML = `<div class="empty-state">Tidak ada part yang cocok${q ? ' dengan <b>' + esc(q) + '</b>' : ''}.<div class="small mt-1">Coba kata yang lebih sedikit, atau hapus filter.</div></div>`;
+            return;
+        }
+        info.innerHTML = `<b>${j.total.toLocaleString('en-US')}</b> part ditemukan${j.total > j.items.length ? ` · menampilkan ${j.items.length} paling relevan` : ''}`;
+        out.innerHTML = j.items.map(p => card(p, tokens)).join('');
+    }
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(() => run(false), 200); };
+
+    box.addEventListener('input', schedule);
+    box.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); run(true); }
+        if (e.key === 'Escape') { box.value = ''; run(false); }
+    });
+    modelSel.addEventListener('change', () => run(false));
+    document.querySelectorAll('.fchip').forEach(b => b.addEventListener('click', () => {
+        document.querySelectorAll('.fchip').forEach(x => x.classList.toggle('active', x === b));
+        f = b.dataset.f; run(false);
+    }));
+    out.addEventListener('click', e => {
+        const c = e.target.closest('.sc'); if (!c) return;
+        if (e.target.closest('.act-loc')) {
+            SP.locate(c.dataset.id, c.querySelector('[data-loc]'), c.querySelector('.sc-msg')); return;
+        }
+        if (e.target.closest('a')) { saveRecent(box.value); return; }
+        saveRecent(box.value);
+        SP.showPart(c.dataset.id);
+    });
+    out.addEventListener('keydown', e => { const c = e.target.closest('.sc'); if (c && e.key === 'Enter' && e.target === c) SP.showPart(c.dataset.id); });
+    document.getElementById('sqScan').addEventListener('click', () => SP.scan(async code => {
+        box.value = code; await run(true);
+        const p = await SP.lookup(code); if (p) SP.showPart(p.id);
+    }));
+
+    // Isi awal dari URL (?q=&f=&model=) supaya hasil bisa dibagikan / dibuka dari menu atas.
+    const u = new URLSearchParams(location.search);
+    box.value = u.get('q') || ''; modelSel.value = u.get('model') || ''; f = u.get('f') || '';
+    document.querySelectorAll('.fchip').forEach(x => x.classList.toggle('active', x.dataset.f === f));
+    run(!!box.value);
+})();
+</script>
+}

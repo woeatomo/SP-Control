@@ -27,6 +27,7 @@
             <div class="collapse navbar-collapse" id="nav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link @Act("/")" asp-page="/Index">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link @Act("/Search")" asp-page="/Search">Cari Part</a></li>
                     <li class="nav-item"><a class="nav-link @(path.StartsWith("/Parts") && !path.StartsWith("/Parts/Labels") ? "active" : "")" asp-page="/Parts/Index">Master Data</a></li>
                     <li class="nav-item"><a class="nav-link @Act("/Parts/Labels")" asp-page="/Parts/Labels">Label QR</a></li>
                     @if (isAdmin)
@@ -72,8 +73,9 @@
                 {
                     <span class="badge site-btn me-2">🏭 @SiteCtx.Current.Code</span>
                 }
-                <form class="d-flex me-2" method="get" action="/Parts">
-                    <input class="form-control form-control-sm" name="q" placeholder="Cari part…" aria-label="Cari part" />
+                <form class="d-flex me-2 position-relative nav-search" method="get" action="/Search" role="search">
+                    <input class="form-control form-control-sm" id="navSearch" name="q" placeholder="Cari part…  /" aria-label="Cari part" autocomplete="off" />
+                    <div class="nav-sugg" id="navSugg" role="listbox"></div>
                 </form>
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -122,6 +124,8 @@
             </div>
         </div>
     </div>
+
+    @if (User.Identity?.IsAuthenticated == true) { <partial name="_PartPopup" /> }
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

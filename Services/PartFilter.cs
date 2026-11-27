@@ -31,14 +31,8 @@ public class PartFilter
     public IQueryable<Part> Apply(IQueryable<Part> q)
     {
         static string L(string s) => $"%{s.Trim()}%";
-        if (!string.IsNullOrWhiteSpace(Q))
-        {
-            var k = L(Q);
-            q = q.Where(p => EF.Functions.Like(p.PartNumber, k) || EF.Functions.Like(p.Name, k)
-                || EF.Functions.Like(p.Specification ?? "", k) || EF.Functions.Like(p.Category ?? "", k)
-                || EF.Functions.Like(p.Brand ?? "", k) || EF.Functions.Like(p.Supplier ?? "", k) || EF.Functions.Like(p.Machine ?? "", k)
-                || EF.Functions.Like(p.Location ?? "", k) || EF.Functions.Like(p.Remarks ?? "", k));
-        }
+        // Pencarian global memakai mesin yang sama dengan halaman Cari Part (multi kata, tidak peka tanda baca).
+        if (!string.IsNullOrWhiteSpace(Q)) q = PartSearch.Apply(q, Q);
         if (!string.IsNullOrWhiteSpace(PartNumber)) { var k = L(PartNumber); q = q.Where(p => EF.Functions.Like(p.PartNumber, k)); }
         if (!string.IsNullOrWhiteSpace(Name)) { var k = L(Name); q = q.Where(p => EF.Functions.Like(p.Name, k) || EF.Functions.Like(p.Specification ?? "", k)); }
         if (!string.IsNullOrWhiteSpace(Category)) { var k = L(Category); q = q.Where(p => EF.Functions.Like(p.Category ?? "", k)); }

@@ -120,3 +120,57 @@ window.SP = (function () {
 
     return { scan, lookup, search, fmt, esc, locate, showPart };
 })();
+
+
+// ---- Kotak cari di menu atas: hasil langsung saat mengetik ----
+(function () {
+    const box = document.getElementById('navSearch'), sugg = document.getElementById('navSugg');
+    if (!box || !sugg) return;
+    let timer, seq = 0, items = [], active = -1;
+    const lvCls = { EMPTY: 'lv-empty', LOW: 'lv-low', CRITICAL: 'lv-critical', NORMAL: 'lv-normal', OVERSTOCK: 'lv-over' };
+    const close = () => { sugg.classList.remove('show'); active = -1; };
+    function render(total, q) {
+        if (!items.length) { sugg.innerHTML = `<div class="ns-empty">Tidak ada part yang cocok.</div>`; sugg.classList.add('show'); return; }
+        sugg.innerHTML = items.map((p, i) => `<a href="/Parts/Details/${p.id}" class="ns-item ${i === active ? 'active' : ''}" data-i="${i}" role="option">
+                <div class="ns-line"><b>${SP.esc(p.partNumber)}</b><span class="badge lv ${lvCls[p.level] || ''}">${SP.esc(p.level)}</span></div>
+                <div class="ns-sub">${SP.esc(p.name)}</div>
+                <div class="ns-sub">📍 ${SP.esc(p.location || '-')} · stok <b>${SP.fmt(p.stockQty)}</b> ${SP.esc(p.unit)}</div>
+            </a>`).join('') +
+            `<a class="ns-all" href="/Search?q=${encodeURIComponent(q)}">Lihat semua hasil${total > items.length ? ' (' + total + ')' : ''} →</a>`;
+        sugg.classList.add('show');
+    }
+    async function run() {
+        const q = box.value.trim();
+        if (q.length < 2) { close(); return; }
+        const my = ++seq;
+        const r = await fetch('/api/parts/find?take=6&q=' + encodeURIComponent(q));
+        if (my !== seq) return;
+        const j = r.ok ? await r.json() : { total: 0, items: [] };
+        items = j.items; active = -1; render(j.total, q);
+    }
+    box.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 180); });
+    box.addEventListener('focus', () => { if (box.value.trim().length >= 2) run(); });
+    box.addEventListener('keydown', e => {
+        if (!sugg.classList.contains('show')) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            active = (active + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+            render(items.length, box.value.trim());
+        } else if (e.key === 'Enter' && active >= 0) {
+            e.preventDefault(); const p = items[active]; close(); SP.showPart(p.id);
+        } else if (e.key === 'Escape') { close(); box.blur(); }
+    });
+    sugg.addEventListener('mousedown', e => e.preventDefault()); // jangan hilang sebelum klik
+    sugg.addEventListener('click', e => {
+        if (e.target.closest('.ns-all')) { e.preventDefault(); location.href = '/Search?q=' + encodeURIComponent(box.value.trim()); return; }
+        const a = e.target.closest('.ns-item'); if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        e.preventDefault(); close(); SP.showPart(items[+a.dataset.i].id);
+    });
+    box.addEventListener('blur', () => setTimeout(close, 150));
+    // Tombol "/" untuk langsung mencari (kecuali sedang mengetik di kolom lain).
+    document.addEventListener('keydown', e => {
+        if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+        const t = e.target; if (t.matches('input, textarea, select, [contenteditable]')) return;
+        e.preventDefault(); (document.getElementById('sq') || box).focus();
+    });
+})();

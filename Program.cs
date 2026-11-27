@@ -142,6 +142,34 @@ app.MapGet("/parts/{id:int}/image", async (int id, HttpContext http, AppDbContex
     return Results.File(path, ImageStore.ContentType(path));
 });
 
+// Pencarian pintar untuk halaman Cari Part & kotak cari di menu atas.
+// f: stock (ada stok) | restock (EMPTY/LOW/CRITICAL) | reusable | second. Hasil diurutkan menurut relevansi.
+app.MapGet("/api/parts/find", async (string? q, string? f, string? model, int? take, AppDbContext db) =>
+{
+    var query = db.Parts.AsNoTracking().Include(x => x.Site).AsQueryable();
+    query = PartSearch.Apply(query, q);
+    query = f switch
+    {
+        "stock" => query.Where(p => p.StockQty > 0),
+        "restock" => query.Where(p => p.StockQty <= p.MinStock),
+        "reusable" => query.Where(p => p.IsReusable),
+        "second" => query.Where(p => p.Condition == PartCondition.Second),
+        _ => query
+    };
+    if (!string.IsNullOrWhiteSpace(model)) query = query.Where(p => p.Category == model);
+    if (string.IsNullOrWhiteSpace(q) && string.IsNullOrWhiteSpace(f) && string.IsNullOrWhiteSpace(model))
+        return Results.Json(new { total = 0, items = Array.Empty<object>() });
+    var total = await query.CountAsync();
+    // Ambil kandidat secukupnya lalu urutkan menurut skor relevansi.
+    var candidates = await query.OrderBy(p => p.PartNumber).Take(400).ToListAsync();
+    var n = Math.Clamp(take ?? 40, 1, 100);
+    var items = candidates
+        .Select(p => new { p, s = PartSearch.Score(p, q) })
+        .OrderByDescending(x => x.s).ThenByDescending(x => x.p.StockQty > 0).ThenBy(x => x.p.PartNumber)
+        .Take(n).Select(x => PartDto(x.p)).ToList();
+    return Results.Json(new { total, items });
+});
+
 // Tombol "Location": minta rak memberi sinyal posisi part (lampu berkedip / LCD). Khusus Admin.
 app.MapPost("/api/parts/{id:int}/locate", async (int id, HttpRequest req, AppDbContext db, IRackLocator rack, CancellationToken ct) =>
 {

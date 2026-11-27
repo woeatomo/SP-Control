@@ -193,3 +193,53 @@ body { background: #f5f6f8; color: var(--app-ink); }
 /* Warna solid untuk bar komposisi & swatch (badge tetap memakai warna lembut .lv-*) */
 .sv-empty { background: #d03b3b; } .sv-low { background: #ec835a; } .sv-critical { background: #fab219; }
 .sv-normal { background: #0ca30c; } .sv-over { background: #6da7ec; }
+
+/* ================= Cari Part ================= */
+.srch { max-width: 1480px; margin: 0 auto; }
+.srch-hero { background: #fff; border: 1px solid #e8eaee; border-radius: 14px; padding: 20px 22px; margin: 4px 0 14px; }
+.srch-box { position: relative; display: flex; gap: 8px; }
+.srch-box .form-control { height: 52px; font-size: 1.1rem; padding-left: 46px; border-radius: 12px; border: 1.5px solid #d6dbe2; }
+.srch-box .form-control:focus { border-color: #2a78d6; box-shadow: 0 0 0 4px rgba(42, 120, 214, .12); }
+.srch-ico { position: absolute; left: 16px; top: 50%; transform: translateY(-52%); font-size: 1.4rem; color: #8a94a3; pointer-events: none; }
+.srch-scan { border-radius: 12px; border: 1.5px solid #d6dbe2; background: #fff; white-space: nowrap; }
+.srch-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.srch-filters .form-select { width: auto; min-width: 160px; border-radius: 8px; }
+.fchip { border: 1px solid #e0e4ea !important; background: #fff; color: #475467; border-radius: 999px !important; margin: 0 6px 4px 0; padding: 3px 12px; }
+.fchip.active { background: #1f2a37; color: #fff; border-color: #1f2a37 !important; }
+.srch-recent { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.srch-recent .chip::before { display: none; }
+.rchip { cursor: pointer; }
+.srch-info { color: #667085; font-size: .9rem; margin: 6px 2px 10px; }
+.srch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; }
+.sc { display: flex; gap: 14px; background: #fff; border: 1px solid #e8eaee; border-radius: 14px; padding: 14px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.sc:hover, .sc:focus { border-color: #b9cde8; box-shadow: 0 4px 14px rgba(16, 24, 40, .06); outline: none; }
+.sc-img { flex: none; width: 96px; height: 96px; border-radius: 10px; background: #f3f5f8; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.sc-img img { width: 100%; height: 100%; object-fit: cover; }
+.sc-noimg { font-size: 2rem; color: #c3cad4; }
+.sc-body { min-width: 0; flex: 1; }
+.sc-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sc-code { font-weight: 650; font-size: 1rem; }
+.sc-name { font-size: .92rem; margin-top: 2px; }
+.sc-meta { font-size: .8rem; color: #667085; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0 4px; }
+.sc-stock { font-size: .88rem; font-variant-numeric: tabular-nums; }
+.sc-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sc-actions .btn { border-radius: 8px; padding: .2rem .6rem; }
+.sc-actions .btn-light { background: #f3f5f8; border-color: #f3f5f8; }
+.srch mark, .ns-item mark { background: #fff1b8; color: inherit; padding: 0 1px; border-radius: 2px; }
+@media (max-width: 575.98px) {
+    .srch-grid { grid-template-columns: 1fr; }
+    .sc-img { width: 64px; height: 64px; }
+    .srch-box .form-control { height: 46px; font-size: 1rem; }
+}
+
+/* Kotak cari di menu atas */
+.nav-search .form-control { min-width: 220px; }
+.nav-sugg { display: none; position: absolute; top: calc(100% + 6px); right: 0; width: 380px; max-width: 92vw; background: #fff; border-radius: 12px; box-shadow: 0 12px 32px rgba(16, 24, 40, .18); z-index: 1060; overflow: hidden; }
+.nav-sugg.show { display: block; }
+.ns-item { display: block; padding: 9px 14px; color: #1f2a37; text-decoration: none; border-bottom: 1px solid #f1f2f4; }
+.ns-item:hover, .ns-item.active { background: #f3f7fd; color: #1f2a37; }
+.ns-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ns-sub { font-size: .8rem; color: #667085; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ns-all { display: block; padding: 9px 14px; font-size: .85rem; font-weight: 500; text-decoration: none; background: #fafbfc; }
+.ns-empty { padding: 14px; color: #667085; font-size: .9rem; }

@@ -75,6 +75,7 @@ Menu **Pengaturan → Perusahaan & Format Kode** (khusus Admin, tersimpan di dat
 | Menu | Isi |
 |---|---|
 | **Dashboard** | Notifikasi EMPTY / LOW / CRITICAL untuk semua part (active maupun inactive) dengan saran order (max − now), jumlah OVERSTOCK, loan terlambat, pengingat stock checking semester berjalan, nilai aset aktif & non-aktif (USD), grafik nilai pemakaian per bulan, transaksi terakhir |
+| **Cari Part** | Pencarian cepat untuk teknisi: hasil langsung saat mengetik berupa kartu (foto, stok + status, rack, tombol Location/Issue/Label), beberapa kata sekaligus (`bando 1440`), tidak peka tanda baca (`s8m1440` = `S8M-1440`), diurutkan menurut relevansi, filter cepat (ada stok, perlu restock, reusable, 2nd, model), scan QR, pencarian terakhir. Kotak cari di menu atas juga langsung menampilkan hasil (tekan `/` dari halaman mana pun) |
 | **Master Data** | Kolom supplier dan lokasi penyimpanan; gambar part (opsional, disarankan); popup detail dengan gambar dan tombol 📍 Location; kolom sama dengan Excel MASTER STOCK; pencarian global + filter di setiap header kolom (termasuk Status), sorting, export/import CSV, cetak label QR, tanda ♻ Reusable dan kondisi 2nd, status aset Aktif / Non-aktif |
 | **Label QR** | Pembuat label untuk dicetak dan ditempel: Kecil 40×20 mm (di part), Sedang 60×30 mm (wadah/kantong), Besar 100×50 mm (drawer/box/rak); jumlah salinan per part; tambah part dengan scan/ketik |
 | **Issued** | Nama PIC maintenance peminta, mesin/line, no. WO; scan QR berulang = qty bertambah; stok tidak bisa minus |
