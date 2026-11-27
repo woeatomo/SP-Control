@@ -38,7 +38,7 @@ window.SPReq = (function () {
     function render(d) {
         current = d;
         document.getElementById('reqKicker').innerHTML = `${d.urgent ? '<span class="badge bg-danger me-1">⚡ URGENT</span>' : ''}<span class="req-st ${stCls[d.status]}">${esc(d.statusText)}</span> · ${ago(d.createdAt)}`;
-        document.getElementById('reqTitle').innerHTML = `${esc(d.requesterName)}${d.line ? ` <span class="text-muted fw-normal">· ${esc(d.line)}</span>` : ''} <span class="req-no">${esc(d.reqNo)}</span>`;
+        document.getElementById('reqTitle').innerHTML = '<span class="req-pic-label">PIC peminta</span> ' + `${esc(d.requesterName)}${d.line ? ` <span class="text-muted fw-normal">· untuk ${esc(d.line)}</span>` : ''} <span class="req-no">${esc(d.reqNo)}</span>`;
         const lines = d.lines.map(l => {
             if (l.part) return `<div class="rq-line">${partRow(l.part, l.qty)}</div>`;
             const head = `<div class="rq-free"><span class="rq-quote">“${esc(l.freeText)}”</span><span class="rq-qty-inline">× ${fmt(l.qty)}</span></div>`;
@@ -121,7 +121,7 @@ window.SPReq = (function () {
         const newest = fresh[0];
         const played = SPSound.play('message');
         if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-            try { new Notification('Permintaan part ' + newest.reqNo, { body: `${newest.requesterName}${newest.line ? ' · ' + newest.line : ''} · ${newest.items} item` }); } catch (e) { }
+            try { new Notification('Permintaan part ' + newest.reqNo, { body: `${newest.requesterName}${newest.line ? ' · untuk ' + newest.line : ''} · ${newest.items} item` }); } catch (e) { }
         }
         if (!played && !SPSound.isUnlocked()) toast('🔔 Klik di mana saja untuk mengaktifkan suara notifikasi.');
         if (fresh.length > 1) toast(`📥 ${fresh.length} permintaan baru — <a href="/Requests">lihat semua</a>`);

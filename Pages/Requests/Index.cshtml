@@ -27,14 +27,14 @@
         {
             <div class="table-responsive">
                 <table class="table table-borderless dash-table align-middle mb-0">
-                    <thead><tr>@if (SiteCtx.IsAll) { <th>Site</th> }<th>No.</th><th>Peminta</th><th>Part diminta</th><th>Waktu</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr>@if (SiteCtx.IsAll) { <th>Site</th> }<th>No.</th><th>PIC peminta / digunakan untuk</th><th>Part diminta</th><th>Waktu</th><th>Status</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var r in Model.Items)
                         {
                             <tr class="req-row" data-id="@r.Id" style="cursor:pointer">
                                 @if (SiteCtx.IsAll) { <td><span class="site-tag">@SiteCtx.CodeOf(r.SiteId)</span></td> }
                                 <td class="nowrap"><span class="font-monospace small">@r.ReqNo</span>@if (r.Urgency == RequestUrgency.Urgent) { <span class="badge bg-danger ms-1">⚡ Urgent</span> }</td>
-                                <td><b>@r.RequesterName</b><div class="small text-muted">@r.Line</div></td>
+                                <td><b>@r.RequesterName</b>@if (!string.IsNullOrWhiteSpace(r.Line)) { <div class="small text-muted">untuk @r.Line</div> }</td>
                                 <td class="small" style="max-width:420px">
                                     @foreach (var l in r.Lines.Take(3))
                                     {

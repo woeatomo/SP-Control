@@ -63,7 +63,9 @@ public class EntryModel : PageModel
         if (Request != null && EntryMode == EntryMode.Issue)
         {
             // Isi otomatis dari permintaan: PIC = peminta, line, referensi = no. permintaan.
-            Header.Pic = Request.RequesterName; Header.Department = Request.Line; Header.Reference = Request.ReqNo; Header.Notes = Request.Notes;
+            // PIC peminta & "digunakan untuk" dari tablet; no. WO dll. dilengkapi PIC spare part.
+            Header.Pic = Request.RequesterName; Header.Department = Request.Line;
+            Header.Notes = string.Join(" · ", new[] { "Permintaan " + Request.ReqNo, Request.Notes }.Where(x => !string.IsNullOrWhiteSpace(x)));
             lines.AddRange(Request.Lines.Where(l => l.PartId.HasValue).Select(l => new EntryLine { PartId = l.PartId!.Value, Qty = l.Qty }));
         }
         await LoadAsync(lines);

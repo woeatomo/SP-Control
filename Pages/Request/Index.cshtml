@@ -50,12 +50,12 @@
         <aside class="kz-cart" id="cart">
             <div class="kz-cart-title">Permintaan Anda <span class="kz-count" id="count">0</span></div>
 
-            <label class="kz-label" for="name">Nama peminta</label>
-            <input id="name" class="kz-input" maxlength="100" placeholder="Nama Anda" autocomplete="off" />
+            <label class="kz-label" for="name">Nama PIC yang meminta <span class="kz-req">*wajib</span></label>
+            <input id="name" class="kz-input" maxlength="100" placeholder="Nama PIC" autocomplete="off" required aria-required="true" />
             <div class="kz-chips" id="nameChips"></div>
 
-            <label class="kz-label" for="line">Line / mesin</label>
-            <input id="line" class="kz-input" maxlength="120" placeholder="mis. Injection Line 2" autocomplete="off" />
+            <label class="kz-label" for="line">Digunakan untuk dimana <span class="kz-opt">opsional</span></label>
+            <input id="line" class="kz-input" maxlength="120" placeholder="mis. Injection Line 2 – ganti belt conveyor" autocomplete="off" />
             <div class="kz-chips" id="lineChips"></div>
 
             <div class="kz-seg" role="radiogroup" aria-label="Urgensi">
@@ -68,6 +68,7 @@
 
             <textarea id="notes" class="kz-input" rows="2" maxlength="500" placeholder="Catatan (opsional)"></textarea>
             <div class="kz-error" id="err"></div>
+            <div class="kz-note">Detail lainnya (no. WO, mesin, dll.) dilengkapi oleh PIC spare part saat menyerahkan barang.</div>
             <button type="button" class="kz-send" id="btnSend" disabled>Kirim Permintaan</button>
         </aside>
     </main>
@@ -168,7 +169,7 @@
     function validate() {
         const ok = cart.length > 0 && $('name').value.trim().length > 0;
         $('btnSend').disabled = !ok;
-        $('btnSend').textContent = !cart.length ? 'Kirim Permintaan' : !$('name').value.trim() ? 'Isi nama peminta' : `Kirim Permintaan (${cart.length} item)`;
+        $('btnSend').textContent = !cart.length ? 'Kirim Permintaan' : !$('name').value.trim() ? 'Isi nama PIC yang meminta' : `Kirim Permintaan (${cart.length} item)`;
     }
 
     if (grid) {
@@ -245,7 +246,7 @@
         try { const r = await fetch('/api/request/board', { cache: 'no-store' }); if (!r.ok) return; list = await r.json(); } catch (e) { return; }
         $('boardList').innerHTML = list.length ? list.map(r => `<div class="kz-row ${r.status === 'Ready' ? 'ready' : ''}">
                 <div><div class="kz-row-no">${esc(r.reqNo)} ${r.urgent ? '<span class="kz-pill no">⚡ Urgent</span>' : ''}</div>
-                <div class="kz-row-who">${esc(r.requesterName)}${r.line ? ' · ' + esc(r.line) : ''} · ${r.items} item · ${new Date(r.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="kz-row-who">${esc(r.requesterName)}${r.line ? ' · untuk ' + esc(r.line) : ''} · ${r.items} item · ${new Date(r.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
                 ${r.responseNote ? `<div class="kz-row-note">💬 ${esc(r.responseNote)}</div>` : ''}</div>
                 <span class="req-st ${stCls[r.status]}">${esc(r.statusText)}</span></div>`).join('')
             : '<div class="kz-items-empty">Belum ada permintaan dalam 24 jam terakhir.</div>';

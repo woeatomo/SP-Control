@@ -278,3 +278,4 @@ body { background: #f5f6f8; color: var(--app-ink); }
 .app-nav .nav-link { white-space: nowrap; }
 .req-toast { visibility: hidden; opacity: 0; transition: transform .3s, opacity .3s, visibility .3s; }
 .req-toast.show { visibility: visible; opacity: 1; }
+.req-pic-label { display: block; font-size: .72rem; font-weight: 600; color: #667085; text-transform: uppercase; letter-spacing: .04em; }

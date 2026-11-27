@@ -115,3 +115,6 @@ textarea.kz-input { margin-top: 12px; resize: none; }
 }
 .kz-toast { visibility: hidden; opacity: 0; transition: transform .3s, opacity .3s, visibility .3s; }
 .kz-toast.show { visibility: visible; opacity: 1; }
+.kz-req { color: #b42318; font-weight: 700; font-size: .78rem; margin-left: 4px; }
+.kz-opt { color: #8a94a3; font-weight: 500; font-size: .78rem; margin-left: 4px; }
+.kz-note { font-size: .8rem; color: #8a94a3; text-align: center; margin: 2px 0 6px; }

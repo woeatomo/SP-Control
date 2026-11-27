@@ -42,7 +42,7 @@ public class RequestService
         var site = _site.Current;
         if (site == null) return (null, "Tablet belum terhubung ke satu site. Hubungi admin.");
         var name = (r.Name ?? "").Trim();
-        if (name.Length == 0) return (null, "Nama peminta wajib diisi.");
+        if (name.Length == 0) return (null, "Nama PIC yang meminta wajib diisi.");
         var items = r.Items.Where(i => i.Qty > 0 && (i.PartId.HasValue || !string.IsNullOrWhiteSpace(i.Text))).Take(30).ToList();
         if (items.Count == 0) return (null, "Tambahkan minimal satu part.");
         if (items.Any(i => i.Qty > 9999)) return (null, "Qty terlalu besar.");
